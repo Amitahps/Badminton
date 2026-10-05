@@ -35,7 +35,7 @@ if (isset($_POST['create_backup'])) {
         if ($parts && in_array($parts[0], $skipDirs, true)) {
             continue;
         }
-        if (str_contains($rel, '/.git/') || str_starts_with($rel, '.git/')) {
+        if (strpos($rel, '/.git/') !== false || strpos($rel, '.git/') === 0) {
             continue;
         }
         $zip->addFile($full, $rel);
@@ -48,7 +48,7 @@ if (isset($_POST['create_backup'])) {
 if (isset($_GET['download'])) {
     $safe = basename((string)$_GET['download']);
     $path = BM_BACKUP_DIR . '/' . $safe;
-    if (!is_file($path) || !str_ends_with(strtolower($safe), '.zip')) {
+    if (!is_file($path) || substr(strtolower($safe), -4) !== '.zip') {
         http_response_code(404);
         exit('Not found');
     }

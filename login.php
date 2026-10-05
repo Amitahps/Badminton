@@ -1,7 +1,15 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/helpers.php';
-bm_boot_session();
+
+try {
+    require_once __DIR__ . '/helpers.php';
+    bm_boot_session();
+} catch (Throwable $e) {
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "Badminton setup error:\n" . $e->getMessage() . "\n\nOpen check.php for details.";
+    exit;
+}
 
 if (bm_is_logged_in()) {
     bm_redirect('index.php');
@@ -9,12 +17,16 @@ if (bm_is_logged_in()) {
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $user = trim((string)($_POST['username'] ?? ''));
-    $pass = (string)($_POST['password'] ?? '');
-    if (bm_login($user, $pass)) {
-        bm_redirect('index.php');
+    try {
+        $user = trim((string)($_POST['username'] ?? ''));
+        $pass = (string)($_POST['password'] ?? '');
+        if (bm_login($user, $pass)) {
+            bm_redirect('index.php');
+        }
+        $error = 'Invalid username or password.';
+    } catch (Throwable $e) {
+        $error = $e->getMessage();
     }
-    $error = 'Invalid username or password.';
 }
 
 $pageTitle = 'Login · Badminton';

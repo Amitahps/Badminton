@@ -29,9 +29,9 @@ $script = basename($_SERVER['PHP_SELF'] ?? '');
   </a>
   <nav class="nav">
     <a href="index.php" class="<?= $script === 'index.php' ? 'active' : '' ?>">Home</a>
-    <a href="categories.php" class="<?= str_starts_with($script, 'categor') ? 'active' : '' ?>">Age Categories</a>
-    <a href="players.php" class="<?= str_starts_with($script, 'player') ? 'active' : '' ?>">Players</a>
-    <a href="tournaments.php" class="<?= str_starts_with($script, 'tournament') || $script === 'letter.php' ? 'active' : '' ?>">Tournaments</a>
+    <a href="categories.php" class="<?= strpos($script, 'categor') === 0 ? 'active' : '' ?>">Age Categories</a>
+    <a href="players.php" class="<?= strpos($script, 'player') === 0 ? 'active' : '' ?>">Players</a>
+    <a href="tournaments.php" class="<?= strpos($script, 'tournament') === 0 || $script === 'letter.php' ? 'active' : '' ?>">Tournaments</a>
     <a href="backup.php" class="<?= $script === 'backup.php' ? 'active' : '' ?>">Backup</a>
     <a href="change-password.php">Password</a>
     <a class="logout" href="logout.php">Logout</a>

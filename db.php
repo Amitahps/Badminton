@@ -10,31 +10,41 @@ function bm_db(): PDO
         return $pdo;
     }
 
-    if (!is_dir(BM_DATA_DIR)) {
-        mkdir(BM_DATA_DIR, 0755, true);
-    }
-    if (!is_dir(BM_UPLOAD_DIR)) {
-        mkdir(BM_UPLOAD_DIR, 0755, true);
-    }
-    if (!is_dir(BM_BACKUP_DIR)) {
-        mkdir(BM_BACKUP_DIR, 0755, true);
+    if (!extension_loaded('pdo_sqlite')) {
+        throw new RuntimeException('PDO SQLite is not enabled on this hosting. Enable pdo_sqlite in Hostinger PHP settings.');
     }
 
-    $needInit = !file_exists(BM_DB_PATH);
-    $pdo = new PDO('sqlite:' . BM_DB_PATH, null, null, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]);
-    $pdo->exec('PRAGMA foreign_keys = ON');
+    if (!is_dir(BM_DATA_DIR) && !@mkdir(BM_DATA_DIR, 0755, true) && !is_dir(BM_DATA_DIR)) {
+        throw new RuntimeException('Cannot create data/ folder. Set writable permissions (755/775).');
+    }
+    if (!is_dir(BM_UPLOAD_DIR) && !@mkdir(BM_UPLOAD_DIR, 0755, true) && !is_dir(BM_UPLOAD_DIR)) {
+        throw new RuntimeException('Cannot create data/uploads/ folder. Set writable permissions.');
+    }
+    if (!is_dir(BM_BACKUP_DIR) && !@mkdir(BM_BACKUP_DIR, 0755, true) && !is_dir(BM_BACKUP_DIR)) {
+        throw new RuntimeException('Cannot create backups/ folder. Set writable permissions.');
+    }
+    if (!is_writable(BM_DATA_DIR)) {
+        throw new RuntimeException('data/ folder is not writable. In File Manager set permission 755 or 775.');
+    }
 
-    if ($needInit) {
-        bm_init_schema($pdo);
-    } else {
-        // Ensure schema exists even if empty file was uploaded
-        $check = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")->fetch();
-        if (!$check) {
+    try {
+        $needInit = !file_exists(BM_DB_PATH);
+        $pdo = new PDO('sqlite:' . BM_DB_PATH, null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+        $pdo->exec('PRAGMA foreign_keys = ON');
+
+        if ($needInit) {
             bm_init_schema($pdo);
+        } else {
+            $check = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")->fetch();
+            if (!$check) {
+                bm_init_schema($pdo);
+            }
         }
+    } catch (Throwable $e) {
+        throw new RuntimeException('Database error: ' . $e->getMessage());
     }
 
     return $pdo;

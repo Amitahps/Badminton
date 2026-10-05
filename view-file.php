@@ -4,7 +4,7 @@ require_once __DIR__ . '/helpers.php';
 bm_require_login();
 
 $f = basename((string)($_GET['f'] ?? ''));
-if ($f === '' || str_contains($f, '..')) {
+if ($f === '' || strpos($f, '..') !== false) {
     http_response_code(404);
     exit('Not found');
 }
