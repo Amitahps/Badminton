@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ category.name }} · {{ tournament.name }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <p class="eyebrow">{{ tournament.name }} · Held at {{ tournament.held_at }} · {{ date_text }}</p>
+    <h1>Tick players — {{ category.name }}</h1>
+    <p class="lede">Select who will participate in this category, then save. You can open other categories next.</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('tournament_detail', tournament_id=tournament.id) }}">Back to tournament</a>
+  </div>
+</section>
+
+<section class="panel">
+  {% if players %}
+  <form method="post">
+    <div class="tick-toolbar">
+      <button type="button" class="btn btn-sm" id="select-all">Select all</button>
+      <button type="button" class="btn btn-sm" id="clear-all">Clear all</button>
+      <button type="submit" class="btn btn-primary">Save selected list</button>
+    </div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="check-col">Tick</th>
+          <th>Name</th>
+          <th>Type</th>
+          <th>BAI ID</th>
+          <th>PBI ID</th>
+          <th>Aadhaar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in players %}
+        <tr>
+          <td class="check-col">
+            <input type="checkbox" name="player_ids" value="{{ p.id }}" class="player-tick" {% if p.is_selected %}checked{% endif %}>
+          </td>
+          <td>
+            <strong>{{ p.full_name }}</strong>
+            {% if p.play_type == 'double' and p.partner_name %}
+            <div class="muted">with {{ p.partner_name }}</div>
+            {% endif %}
+          </td>
+          <td class="cap">{{ p.play_type }}</td>
+          <td>{{ p.bai_id or '—' }}</td>
+          <td>{{ p.pbi_id or '—' }}</td>
+          <td>{% if p.aadhaar_no %}****{{ p.aadhaar_no[-4:] }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Save selected list</button>
+      <a class="btn" href="{{ url_for('tournament_detail', tournament_id=tournament.id) }}">Cancel</a>
+    </div>
+  </form>
+  {% else %}
+  <p class="empty">No players in this category yet. <a href="{{ url_for('player_new') }}">Add players</a> first.</p>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  document.getElementById('select-all')?.addEventListener('click', function () {
+    document.querySelectorAll('.player-tick').forEach(function (el) { el.checked = true; });
+  });
+  document.getElementById('clear-all')?.addEventListener('click', function () {
+    document.querySelectorAll('.player-tick').forEach(function (el) { el.checked = false; });
+  });
+</script>
+{% endblock %}

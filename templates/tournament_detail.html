@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ tournament.name }} · Badminton{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <p class="eyebrow">Tournament</p>
+    <h1>{{ tournament.name }}</h1>
+    <p class="lede">Held at <strong>{{ tournament.held_at }}</strong> on <strong>{{ date_text }}</strong>. Open a category, tick players who will participate, and save. Then open the next category.</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-primary" href="{{ url_for('tournament_letter', tournament_id=tournament.id) }}">Prepare letter</a>
+    <a class="btn" href="{{ url_for('tournament_edit', tournament_id=tournament.id) }}">Edit details</a>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Age categories — tick participants</h2>
+  </div>
+  {% if categories %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th>Players in registry</th>
+        <th>Selected for this tournament</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in categories %}
+      <tr>
+        <td><strong>{{ c.name }}</strong></td>
+        <td>{{ c.player_count }}</td>
+        <td>{{ c.selected_count }}</td>
+        <td class="right">
+          <a class="btn btn-sm btn-primary" href="{{ url_for('tournament_category', tournament_id=tournament.id, cat_id=c.id) }}">Open &amp; tick</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">Create age categories and players first, then return here to tick participants.</p>
+  {% endif %}
+</section>
+{% endblock %}

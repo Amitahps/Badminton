@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Badminton{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <p class="eyebrow">Age category</p>
+    <h1>{{ title }}</h1>
+  </div>
+</section>
+<section class="panel narrow">
+  <form method="post" class="form">
+    <label>Category name
+      <input type="text" name="name" required maxlength="120" value="{{ row.name if row else '' }}" placeholder="e.g. Under-15 Boys">
+    </label>
+    <label>Sort order
+      <input type="number" name="sort_order" value="{{ row.sort_order if row else 0 }}">
+    </label>
+    <label>Notes
+      <textarea name="notes" rows="3">{{ row.notes if row and row.notes else '' }}</textarea>
+    </label>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <a class="btn" href="{{ url_for('categories') }}">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

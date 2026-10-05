@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Player Letter · {{ tournament.name }}{% endblock %}
+{% block head %}
+<style>
+  @media print {
+    .topbar, .no-print, .flash-stack { display: none !important; }
+    body { background: #fff; }
+    .wrap { max-width: none; padding: 0; }
+    .letter-sheet { box-shadow: none; border: none; margin: 0; padding: 12mm 14mm; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<section class="page-head no-print">
+  <div>
+    <p class="eyebrow">Export</p>
+    <h1>PBA letter format</h1>
+    <p class="lede">Category-wise selected players for {{ tournament.name }}.</p>
+  </div>
+  <div class="page-actions">
+    <button type="button" class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
+    <a class="btn" href="{{ url_for('tournament_detail', tournament_id=tournament.id) }}">Back</a>
+  </div>
+</section>
+
+<article class="letter-sheet">
+  <p class="letter-date">Date: {{ today }}</p>
+
+  <p>To<br>
+  The Secretary<br>
+  Punjab Badminton Association</p>
+
+  <p><strong>Subject:</strong> Details of Players Participating in the Tournament Held at {{ held_at }} on {{ date_text }}</p>
+
+  <p>Sir/Madam,</p>
+
+  <p>With due respect, please find below the details of the players participating in the badminton tournament being held at {{ held_at }} on {{ date_text }}. The list of players is provided category-wise for your kind information and record.</p>
+
+  {% if grouped %}
+    {% for block in grouped %}
+    <section class="letter-category">
+      <h2>{{ block.category.name }}</h2>
+      <table class="letter-table">
+        <thead>
+          <tr>
+            <th>S.No.</th>
+            <th>Player Name</th>
+            <th>Single / Double</th>
+            <th>Partner</th>
+            <th>BAI ID</th>
+            <th>PBI ID</th>
+            <th>Aadhaar</th>
+            <th>DOB</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in block.players %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ p.full_name }}</td>
+            <td class="cap">{{ p.play_type }}</td>
+            <td>{{ p.partner_name or '—' }}</td>
+            <td>{{ p.bai_id or '—' }}</td>
+            <td>{{ p.pbi_id or '—' }}</td>
+            <td>{{ p.aadhaar_no or '—' }}</td>
+            <td>{{ p.dob or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endfor %}
+  {% else %}
+    <p><em>No players selected yet. Open each age category in the tournament and tick participants.</em></p>
+  {% endif %}
+
+  <p>Thanking You</p>
+
+  <p class="letter-sign">
+    Member<br>
+    District Badminton Association<br>
+    Hoshiarpur
+  </p>
+</article>
+{% endblock %}

@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+data/badminton.db
+data/uploads/*
+!data/uploads/.gitkeep
+backups/*
+!backups/.gitkeep
+.DS_Store
+Thumbs.db
+*.zip

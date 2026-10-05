@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Badminton{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <p class="eyebrow">Tournament</p>
+    <h1>{{ title }}</h1>
+  </div>
+</section>
+<section class="panel narrow">
+  <form method="post" class="form">
+    <label>Tournament name
+      <input type="text" name="name" required maxlength="200" value="{{ row.name if row else '' }}" placeholder="e.g. District Ranking Tournament">
+    </label>
+    <label>Held at
+      <input type="text" name="held_at" required maxlength="200" value="{{ row.held_at if row else '' }}" placeholder="Venue / city">
+    </label>
+    <div class="two-col">
+      <label>From date
+        <input type="date" name="date_from" required value="{{ row.date_from if row else '' }}">
+      </label>
+      <label>To date
+        <input type="date" name="date_to" required value="{{ row.date_to if row else '' }}">
+      </label>
+    </div>
+    <label>Notes
+      <textarea name="notes" rows="3">{{ row.notes if row and row.notes else '' }}</textarea>
+    </label>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Save tournament</button>
+      <a class="btn" href="{{ url_for('tournaments') }}">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

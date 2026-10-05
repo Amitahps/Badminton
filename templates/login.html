@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Login · Badminton{% endblock %}
+{% block wrap_class %}wrap-login{% endblock %}
+{% block content %}
+<section class="login-panel">
+  <div class="login-visual" aria-hidden="true">
+    <div class="court-lines"></div>
+  </div>
+  <div class="login-card">
+    <p class="eyebrow">District Badminton Association</p>
+    <h1>Hoshiarpur</h1>
+    <p class="lede">Offline tournament entry — age categories, players, and PBA letter list.</p>
+    {% if error %}<div class="flash flash-error">{{ error }}</div>{% endif %}
+    <form method="post" class="form">
+      <label>Username
+        <input type="text" name="username" autocomplete="username" required autofocus value="admin">
+      </label>
+      <label>Password
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <button type="submit" class="btn btn-primary">Sign in</button>
+    </form>
+    <p class="hint">Default login: <strong>admin</strong> / <strong>admin123</strong> — change after first login.</p>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Backup · Badminton{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <p class="eyebrow">Safety</p>
+    <h1>Backup</h1>
+    <p class="lede">Download database and full source code to your laptop. Keep a copy on a USB drive or another folder.</p>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="backup-actions">
+    <form method="post" action="{{ url_for('backup_create') }}">
+      <button type="submit" class="btn btn-primary">Create full backup (database + source code ZIP)</button>
+    </form>
+    <a class="btn" href="{{ url_for('backup_database_only') }}">Download database only (.db)</a>
+  </div>
+  <p class="hint">Full backup ZIP includes <code>data/badminton.db</code>, uploaded Aadhaar/DOB files, and all source code so you can restore on another laptop.</p>
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>Recent backups on this computer</h2></div>
+  {% if backups %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>File</th>
+        <th>Size</th>
+        <th>Created</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in backups %}
+      <tr>
+        <td>{{ b.name }}</td>
+        <td>{{ b.size_kb }} KB</td>
+        <td>{{ b.mtime }}</td>
+        <td class="right"><a class="btn btn-sm" href="{{ url_for('backup_download', filename=b.name) }}">Download to laptop</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No backup created yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Age Categories · Badminton{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <p class="eyebrow">Setup</p>
+    <h1>Age categories</h1>
+    <p class="lede">Create categories such as U-13, U-15, U-17, U-19, Senior. Players are linked to one category.</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-primary" href="{{ url_for('category_new') }}">Create category</a>
+  </div>
+</section>
+
+<section class="panel">
+  {% if rows %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Order</th>
+        <th>Category</th>
+        <th>Players</th>
+        <th>Notes</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.sort_order }}</td>
+        <td><strong>{{ r.name }}</strong></td>
+        <td>{{ r.player_count }}</td>
+        <td>{{ r.notes or '—' }}</td>
+        <td class="right actions">
+          <a class="btn btn-sm" href="{{ url_for('category_edit', cat_id=r.id) }}">Edit</a>
+          <form method="post" action="{{ url_for('category_delete', cat_id=r.id) }}" class="inline" onsubmit="return confirm('Remove this category?');">
+            <button type="submit" class="btn btn-sm btn-danger" {% if r.player_count %}disabled title="Remove players first"{% endif %}>Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No age category yet. Create U-13, U-15, etc. before adding players.</p>
+  {% endif %}
+</section>
+{% endblock %}
