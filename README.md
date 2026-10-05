@@ -1,117 +1,114 @@
-# Badminton Tournament Entry (Offline)
+# Badminton Tournament Entry (Website)
 
-Standalone offline software for **District Badminton Association, Hoshiarpur**.
+**Separate from School ERP.**  
+This is its own website + its own GitHub repository + its own Hostinger website.
 
-This project is **separate from School ERP**. It does not use School ERP files or database.
+Do **not** put this code inside `school-fee-erp`.
 
-## What it does
+---
 
-1. **Admin login** (username + password)
-2. **Create age categories** (U-13, U-15, Senior, etc.)
-3. **Add / edit / remove players**
-   - Name
-   - Single or Double (+ partner name for Double)
-   - BAI ID
-   - PBI ID
-   - Aadhaar number + Aadhaar card file
-   - Date of birth + DOB certificate file
-4. **Create tournament**
-   - Tournament name
-   - Held at ______
-   - On ______ to ______
-5. **Open a category → tick players who will participate → Save**
-6. **Open other categories** the same way
-7. **Prepare letter** in Punjab Badminton Association format and Print / Save as PDF
-8. **Backup** database + source code ZIP to your laptop
+## What this website does
 
-## Default login
+1. Admin login  
+2. Create age categories  
+3. Add / edit / remove players  
+   - Name, Single/Double, BAI ID, PBI ID, Aadhaar + file, DOB certificate  
+4. Create tournament (name, held at, from–to dates)  
+5. Open category → tick players → Save → next category  
+6. Prepare Punjab Badminton Association letter → Print / PDF  
+7. Backup database + source code  
+
+---
+
+## Login
 
 | Field | Value |
 |-------|-------|
 | Username | `admin` |
 | Password | `admin123` |
 
-Change the password after first login (menu → **Password**).
+Change password after first login (menu → **Password**).
 
-## Install and run (Windows laptop)
+---
 
-1. Install [Python 3.10+](https://www.python.org/downloads/) — tick **Add Python to PATH**
-2. Copy this `Badminton` folder to your laptop (e.g. `D:\Badminton`)
-3. Double-click **`install.bat`** once
-4. Double-click **`run.bat`**
-5. Browser opens at `http://127.0.0.1:5055`
-6. Login with `admin` / `admin123`
+## Step 1 — Create GitHub repo named `Badminton` (you do this once)
 
-Keep the black `run.bat` window open while using the software.
+1. Open: https://github.com/new  
+2. Repository name: **`Badminton`**  
+3. Private or Public — your choice  
+4. **Do not** add README / .gitignore / license (empty repo)  
+5. Click **Create repository**  
+6. Reply with the URL, example: `https://github.com/Amitahps/Badminton`
 
-## Install and run (Linux / Mac)
+This must be a **new** repo. Not School ERP.
 
-```bash
-cd Badminton
-chmod +x install.sh run.sh
-./install.sh
-./run.sh
-```
+---
 
-Open `http://127.0.0.1:5055` and login.
+## Step 2 — Push this website to that GitHub repo
 
-## How to use (daily)
-
-1. **Age Categories** → create categories
-2. **Players** → add player details and documents
-3. **Tournaments** → create tournament (name, held at, from–to dates)
-4. Open the tournament → **Open & tick** each category → Save
-5. Click **Prepare letter** → Print / Save as PDF
-6. **Backup** → create ZIP and download to laptop / USB
-
-## Backup
-
-In the app: **Backup** → *Create full backup (database + source code ZIP)* → Download.
-
-The ZIP includes:
-
-- `data/badminton.db` (all saved data)
-- uploaded Aadhaar / DOB certificate files
-- full source code
-
-You can also download **database only** (`.db` file).
-
-## Put source code on GitHub (name: Badminton)
-
-This agent cannot create a new GitHub repository (School ERP token is separate/read-only for new repos). On your laptop:
-
-1. Create a **new empty repository** on GitHub named **`Badminton`** (under your account)
-2. Then run:
+After the empty `Badminton` repo exists:
 
 ```bash
 cd Badminton
-git init
-git add .
-git commit -m "Initial offline Badminton tournament entry software"
-git branch -M main
 git remote add origin https://github.com/YOUR_USERNAME/Badminton.git
+git branch -M main
 git push -u origin main
 ```
 
-Replace `YOUR_USERNAME` with your GitHub username.
+(If the agent has access to your new repo, the agent can push for you.)
 
-## Tech
+---
 
-- Python + Flask
-- SQLite database (offline, stored in `data/badminton.db`)
-- Runs only on your computer (`127.0.0.1`) — no internet required after install
+## Step 3 — Connect GitHub → Hostinger (online website)
 
-## Letter format used
+In Hostinger, create a **separate website / domain or subdomain** for Badminton  
+(example: `badminton.yourdomain.com` or a new domain).  
+**Do not deploy into the School ERP website folder.**
 
-> To  
-> The Secretary  
-> Punjab Badminton Association  
->  
-> Subject: Details of Players Participating in the Tournament Held at __________ on __________  
->  
-> …category-wise player list…  
->  
-> Thanking You  
-> Member  
-> District Badminton Association  
-> Hoshiarpur
+Then:
+
+1. Hostinger hPanel → your Badminton website → **Git** (or Deployments)  
+2. Connect the GitHub repo **`Badminton`** (not `school-fee-erp`)  
+3. Branch: `main`  
+4. Deploy path: usually `public_html` for that website  
+5. Deploy  
+
+Requirements on Hostinger:
+
+- PHP 8.0+ (8.1/8.2 recommended)  
+- PDO SQLite enabled (usually on by default)  
+- Folders `data/` and `data/uploads/` and `backups/` must be writable (permission 755 or 775)
+
+After deploy, open:
+
+`https://YOUR-BADMINTON-DOMAIN/login.php`
+
+---
+
+## Local test (optional)
+
+If PHP is installed on your laptop:
+
+```bash
+cd Badminton
+php -S 127.0.0.1:8080
+```
+
+Open http://127.0.0.1:8080/login.php
+
+---
+
+## Backup
+
+In the website: **Backup** → Create full backup ZIP → Download to laptop.
+
+---
+
+## Important separation
+
+| Project | GitHub | Hostinger |
+|---------|--------|-----------|
+| School ERP | `school-fee-erp` | School ERP website |
+| Badminton | `Badminton` | Separate Badminton website |
+
+Never mix the two.

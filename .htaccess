@@ -1,0 +1,6 @@
+# Protect Badminton website folders on Hostinger / Apache
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+</IfModule>
