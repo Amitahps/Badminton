@@ -8,3 +8,5 @@ backups/*
 Thumbs.db
 *.zip
 .env
+data/ALLOW_EMERGENCY_RESET
+data/EMERGENCY_RESET_DONE
