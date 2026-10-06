@@ -29,17 +29,16 @@ $sql = "SELECT p.*, c.name AS category_name
         WHERE 1=1";
 $params = [];
 if ($showPending) {
-    $sql .= ' AND (p.age_category_id IS NULL OR p.event_code IS NULL OR p.event_code = \'\')';
+    $sql .= " AND (p.age_category_id IS NULL OR NOT EXISTS (SELECT 1 FROM player_events pe WHERE pe.player_id = p.id))";
 } else {
-    // Default list: only assigned players
-    $sql .= ' AND p.age_category_id IS NOT NULL AND p.event_code IS NOT NULL AND p.event_code != \'\'';
+    $sql .= " AND p.age_category_id IS NOT NULL AND EXISTS (SELECT 1 FROM player_events pe WHERE pe.player_id = p.id)";
 }
 if ($catFilter > 0) {
     $sql .= ' AND p.age_category_id = ?';
     $params[] = $catFilter;
 }
 if ($eventFilter !== '' && isset(bm_event_defs()[$eventFilter])) {
-    $sql .= ' AND p.event_code = ?';
+    $sql .= ' AND EXISTS (SELECT 1 FROM player_events pe WHERE pe.player_id = p.id AND pe.event_code = ?)';
     $params[] = $eventFilter;
 }
 if ($q !== '') {
@@ -47,12 +46,17 @@ if ($q !== '') {
     $like = '%' . $q . '%';
     array_push($params, $like, $like, $like);
 }
-$sql .= ' ORDER BY c.sort_order, c.name, p.event_code, p.full_name';
+$sql .= ' ORDER BY c.sort_order, c.name, p.full_name';
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $rows = $stmt->fetchAll();
+foreach ($rows as &$r) {
+    $codes = bm_player_event_codes($pdo, (int)$r['id']);
+    $r['event_labels'] = array_map('bm_event_label', $codes);
+}
+unset($r);
 $categories = $pdo->query('SELECT * FROM age_categories ORDER BY sort_order, name')->fetchAll();
-$pendingCount = (int)$pdo->query("SELECT COUNT(*) FROM players WHERE age_category_id IS NULL OR event_code IS NULL OR event_code=''")->fetchColumn();
+$pendingCount = (int)$pdo->query("SELECT COUNT(*) FROM players p WHERE p.age_category_id IS NULL OR NOT EXISTS (SELECT 1 FROM player_events pe WHERE pe.player_id = p.id)")->fetchColumn();
 
 $pageTitle = 'Players · Badminton';
 require __DIR__ . '/includes/header.php';
@@ -61,7 +65,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow">Registry</p>
     <h1>Players</h1>
-    <p class="lede">Create player name first, then select age category and event. Assigned players appear in this list for tournaments.</p>
+    <p class="lede">Create player name first, then assign age category and one or more events. The same player can play in multiple events in a tournament.</p>
   </div>
   <div class="page-actions">
     <a class="btn btn-primary" href="player-form.php">Add player</a>
@@ -110,7 +114,7 @@ require __DIR__ . '/includes/header.php';
         <td><strong><?= bm_h($r['full_name']) ?></strong></td>
         <td><?= bm_h(bm_gender_label($r['gender'] ?? '')) ?></td>
         <td><?= bm_h($r['category_name'] ?: '— not set —') ?></td>
-        <td><?= bm_h($r['event_code'] ? bm_event_label($r['event_code']) : '— not set —') ?></td>
+        <td><?= $r['event_labels'] ? bm_h(implode(', ', $r['event_labels'])) : '— not set —' ?></td>
         <td><?= bm_h(($r['bai_id'] ?: '—') . ' / ' . ($r['pbi_id'] ?: '—')) ?></td>
         <td class="right actions">
           <a class="btn btn-sm" href="player-assign.php?id=<?= (int)$r['id'] ?>">Category / Event</a>

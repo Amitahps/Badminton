@@ -140,6 +140,15 @@ function bm_init_schema(PDO $pdo): void
             FOREIGN KEY (team_id) REFERENCES tournament_teams(id) ON DELETE CASCADE,
             FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS player_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            player_id INTEGER NOT NULL,
+            event_code TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE(player_id, event_code),
+            FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+        );
     ");
 }
 
@@ -167,6 +176,14 @@ function bm_migrate_schema(PDO $pdo): void
             FOREIGN KEY (team_id) REFERENCES tournament_teams(id) ON DELETE CASCADE,
             FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS player_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            player_id INTEGER NOT NULL,
+            event_code TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE(player_id, event_code),
+            FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+        );
     ");
 
     if (bm_table_exists($pdo, 'players')) {
@@ -176,14 +193,44 @@ function bm_migrate_schema(PDO $pdo): void
         }
         if (!bm_column_exists($pdo, 'players', 'event_code')) {
             $pdo->exec('ALTER TABLE players ADD COLUMN event_code TEXT NULL');
-            // Map old play_type if present
             if (bm_column_exists($pdo, 'players', 'play_type')) {
                 $pdo->exec("UPDATE players SET event_code='single' WHERE play_type='single' AND (event_code IS NULL OR event_code='')");
                 $pdo->exec("UPDATE players SET event_code='double_men' WHERE play_type='double' AND (event_code IS NULL OR event_code='')");
             }
         }
-        // Make age_category optional for new flow: if old NOT NULL constraint exists we can't easily drop it in SQLite;
-        // new installs already allow NULL. For old DBs keep existing values.
+        // Migrate single event_code → player_events (multi-event support)
+        $rows = $pdo->query("SELECT id, event_code FROM players WHERE event_code IS NOT NULL AND event_code != ''")->fetchAll();
+        $ins = $pdo->prepare('INSERT OR IGNORE INTO player_events (player_id, event_code) VALUES (?, ?)');
+        foreach ($rows as $r) {
+            $ins->execute([(int)$r['id'], $r['event_code']]);
+        }
+    }
+}
+
+function bm_player_event_codes(PDO $pdo, int $playerId): array
+{
+    $st = $pdo->prepare('SELECT event_code FROM player_events WHERE player_id = ? ORDER BY event_code');
+    $st->execute([$playerId]);
+    return array_column($st->fetchAll(), 'event_code');
+}
+
+function bm_player_has_event(PDO $pdo, int $playerId, string $eventCode): bool
+{
+    $st = $pdo->prepare('SELECT 1 FROM player_events WHERE player_id = ? AND event_code = ? LIMIT 1');
+    $st->execute([$playerId, $eventCode]);
+    return (bool)$st->fetch();
+}
+
+function bm_set_player_events(PDO $pdo, int $playerId, array $eventCodes): void
+{
+    $pdo->prepare('DELETE FROM player_events WHERE player_id = ?')->execute([$playerId]);
+    $ins = $pdo->prepare('INSERT INTO player_events (player_id, event_code) VALUES (?, ?)');
+    $defs = bm_event_defs();
+    foreach ($eventCodes as $code) {
+        $code = trim((string)$code);
+        if (isset($defs[$code])) {
+            $ins->execute([$playerId, $code]);
+        }
     }
 }
 

@@ -6,7 +6,7 @@ $pdo = bm_db();
 
 $stats = [
     'categories' => (int)$pdo->query('SELECT COUNT(*) FROM age_categories')->fetchColumn(),
-    'players' => (int)$pdo->query("SELECT COUNT(*) FROM players WHERE age_category_id IS NOT NULL AND event_code IS NOT NULL AND event_code!=''")->fetchColumn(),
+    'players' => (int)$pdo->query("SELECT COUNT(*) FROM players p WHERE p.age_category_id IS NOT NULL AND EXISTS (SELECT 1 FROM player_events pe WHERE pe.player_id = p.id)")->fetchColumn(),
     'tournaments' => (int)$pdo->query('SELECT COUNT(*) FROM tournaments')->fetchColumn(),
 ];
 $recent = $pdo->query("
@@ -24,7 +24,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow">Admin desk</p>
     <h1>Tournament entry</h1>
-    <p class="lede">Create players, assign age category and event, form tournament teams (Single / Double Men / Double Girls / Mix Double), then export the participating list.</p>
+    <p class="lede">Create players, assign age category and one or more events (same player can enter multiple events), form tournament teams (Single / Double Men / Double Girls / Mix Double), then export the participating list.</p>
   </div>
   <div class="page-actions">
     <a class="btn btn-primary" href="tournament-form.php">New tournament</a>

@@ -56,8 +56,11 @@ if (isset($_POST['save_team'])) {
         }
 
         foreach ($picked as $p) {
-            if ((int)$p['age_category_id'] !== $catId || ($p['event_code'] ?? '') !== $event) {
-                throw new RuntimeException($p['full_name'] . ' is not assigned to this category/event.');
+            if ((int)$p['age_category_id'] !== $catId) {
+                throw new RuntimeException($p['full_name'] . ' is not in this age category.');
+            }
+            if (!bm_player_has_event($pdo, (int)$p['id'], $event)) {
+                throw new RuntimeException($p['full_name'] . ' is not assigned to event ' . $def['label'] . '.');
             }
         }
 
@@ -123,16 +126,17 @@ if (isset($_POST['save_team'])) {
     bm_redirect('tournament-teams.php?tournament_id=' . $tournamentId . '&category_id=' . $catId . '&event=' . urlencode($event));
 }
 
-// Eligible players for this category+event
+// Eligible players for this category+event (player may also play other events)
 $elig = $pdo->prepare("
     SELECT p.* FROM players p
-    WHERE p.age_category_id = ? AND p.event_code = ?
+    JOIN player_events pe ON pe.player_id = p.id AND pe.event_code = ?
+    WHERE p.age_category_id = ?
     ORDER BY p.full_name
 ");
-$elig->execute([$catId, $event]);
+$elig->execute([$event, $catId]);
 $players = $elig->fetchAll();
 
-// Already used player ids in this tournament category+event
+// Already used in THIS event only (same player may still join other events)
 $usedStmt = $pdo->prepare("
     SELECT m.player_id FROM tournament_team_members m
     JOIN tournament_teams t ON t.id = m.team_id
@@ -180,7 +184,7 @@ require __DIR__ . '/includes/header.php';
       <?php else: ?>
         Select <strong>1 boy + 1 girl</strong> to form a mix double team.
       <?php endif; ?>
-      To change a team in this tournament, remove it and form again.
+      Same player can also play in <strong>other events</strong> in this tournament. To change a team here, remove it and form again.
     </p>
   </div>
   <div class="page-actions">

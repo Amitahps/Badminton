@@ -11,12 +11,13 @@ Do **not** put this code inside `school-fee-erp`.
 
 1. Admin login  
 2. Create age categories  
-3. Add / edit / remove players  
-   - Name, Single/Double, BAI ID, PBI ID, Aadhaar + file, DOB certificate  
-4. Create tournament (name, held at, from–to dates)  
-5. Open category → tick players → Save → next category  
-6. Prepare Punjab Badminton Association letter → Print / PDF  
-7. Backup database + source code  
+3. Add players (name, gender, docs) — no category/event on create  
+4. Assign age category + **one or more events** (Single / Double Men / Double Girls / Mix Double)  
+   - Same player can play in multiple events in a tournament  
+5. Create tournament (name, held at, from–to dates)  
+6. Form teams per category + event (1 or 2 players by event rules)  
+7. Export participating letter / CSV  
+8. Backup database + source code  
 
 ---
 
