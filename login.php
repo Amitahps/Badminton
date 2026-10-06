@@ -14,6 +14,13 @@ try {
 if (bm_is_logged_in()) {
     bm_redirect('index.php');
 }
+if (isset($_GET['cancel_recovery'])) {
+    unset($_SESSION['bm_recovery_user_id'], $_SESSION['bm_recovery_username']);
+    bm_redirect('login.php');
+}
+if (bm_recovery_pending()) {
+    bm_redirect('set-new-password.php');
+}
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -23,7 +30,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (bm_login($user, $pass)) {
             bm_redirect('index.php');
         }
-        $error = 'Invalid username or password.';
+        // Lost password: same box accepts recovery key
+        if (bm_try_recovery_login($user, $pass)) {
+            bm_flash('success', 'Recovery key accepted. Set a new password to continue.');
+            bm_redirect('set-new-password.php');
+        }
+        $error = 'Invalid username, password, or recovery key.';
     } catch (Throwable $e) {
         $error = $e->getMessage();
     }
@@ -42,15 +54,15 @@ require __DIR__ . '/includes/header.php';
     <?php if ($error): ?><div class="flash flash-error"><?= bm_h($error) ?></div><?php endif; ?>
     <form method="post" class="form">
       <label>Username
-        <input type="text" name="username" required autofocus value="admin" autocomplete="username">
+        <input type="text" name="username" required autofocus value="<?= bm_h($_POST['username'] ?? 'admin') ?>" autocomplete="username">
       </label>
-      <label>Password
-        <input type="password" name="password" required autocomplete="current-password">
+      <label>Password or recovery key
+        <input type="password" name="password" required autocomplete="current-password" placeholder="Password, or BM-XXXX-… recovery key">
       </label>
       <button type="submit" class="btn btn-primary">Sign in</button>
     </form>
-    <p class="hint">Default login: <strong>admin</strong> / <strong>admin123</strong> — change after first login.</p>
-    <p class="hint"><a href="recover.php">Forgot password? Use recovery key</a></p>
+    <p class="hint">If you lost the password, paste your <strong>recovery key</strong> in the password box, then set a new password on the next screen.</p>
+    <p class="hint">Default login: <strong>admin</strong> / <strong>admin123</strong> — change after first login. Generate a recovery key under <strong>Password</strong> after sign-in.</p>
   </div>
 </section>
 <?php require __DIR__ . '/includes/footer.php'; ?>

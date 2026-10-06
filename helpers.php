@@ -59,9 +59,76 @@ function bm_login(string $username, string $password): bool
     }
     bm_boot_session();
     session_regenerate_id(true);
+    unset($_SESSION['bm_recovery_user_id'], $_SESSION['bm_recovery_username']);
     $_SESSION['bm_user_id'] = (int)$user['id'];
     $_SESSION['bm_username'] = $user['username'];
     return true;
+}
+
+/**
+ * If password fails, try recovery key. On match, start recovery session
+ * (not full login) so user must set a new password next.
+ */
+function bm_try_recovery_login(string $username, string $recoveryKey): bool
+{
+    $pdo = bm_db();
+    $username = trim($username);
+    $recoveryKey = strtoupper(trim($recoveryKey));
+    if ($username === '' || $recoveryKey === '') {
+        return false;
+    }
+    $st = $pdo->prepare('SELECT id, username, recovery_key_hash FROM users WHERE username = ? LIMIT 1');
+    $st->execute([$username]);
+    $user = $st->fetch();
+    if (!$user || empty($user['recovery_key_hash'])) {
+        return false;
+    }
+    if (!password_verify($recoveryKey, (string)$user['recovery_key_hash'])) {
+        return false;
+    }
+    bm_boot_session();
+    session_regenerate_id(true);
+    $_SESSION = [];
+    $_SESSION['bm_recovery_user_id'] = (int)$user['id'];
+    $_SESSION['bm_recovery_username'] = $user['username'];
+    return true;
+}
+
+function bm_recovery_pending(): bool
+{
+    bm_boot_session();
+    return !empty($_SESSION['bm_recovery_user_id']);
+}
+
+function bm_require_recovery_pending(): void
+{
+    if (!bm_recovery_pending()) {
+        header('Location: login.php');
+        exit;
+    }
+}
+
+function bm_complete_recovery_new_password(string $newPassword, string $confirm): string
+{
+    bm_require_recovery_pending();
+    if (strlen($newPassword) < 6) {
+        throw new RuntimeException('New password must be at least 6 characters.');
+    }
+    if ($newPassword !== $confirm) {
+        throw new RuntimeException('New password and confirm password do not match.');
+    }
+    $pdo = bm_db();
+    $uid = (int)$_SESSION['bm_recovery_user_id'];
+    $username = (string)($_SESSION['bm_recovery_username'] ?? '');
+    $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+        ->execute([password_hash($newPassword, PASSWORD_DEFAULT), $uid]);
+    $newKey = bm_set_user_recovery_key($pdo, $uid);
+    // Full login
+    unset($_SESSION['bm_recovery_user_id'], $_SESSION['bm_recovery_username']);
+    session_regenerate_id(true);
+    $_SESSION['bm_user_id'] = $uid;
+    $_SESSION['bm_username'] = $username;
+    return $newKey;
 }
 
 function bm_logout(): void
