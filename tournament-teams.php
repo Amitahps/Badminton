@@ -245,13 +245,14 @@ $available = array_values(array_filter($players, static function ($p) use ($used
 }));
 
 $dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
-$pageTitle = $def['label'] . ' · ' . $category['name'];
+$mixGroupLabel = trim((string)($category['age_group'] ?? ''));
+$pageTitle = $def['label'] . ' · ' . ($isMix && $mixGroupLabel !== '' ? $mixGroupLabel : $category['name']);
 require __DIR__ . '/includes/header.php';
 ?>
 <section class="page-head">
   <div>
     <p class="eyebrow"><?= bm_h($tournament['name']) ?> · <?= bm_h($tournament['held_at']) ?> · <?= bm_h($dateText) ?></p>
-    <h1><?= bm_h($category['name']) ?> — <?= bm_h($def['label']) ?></h1>
+    <h1><?= bm_h($isMix && $mixGroupLabel !== '' ? $mixGroupLabel : $category['name']) ?> — <?= bm_h($def['label']) ?></h1>
     <p class="lede">
       <?php if ($event === 'single'): ?>
         Tick <strong>one, several, or all</strong> players, then click <strong>Save teams</strong> once at the bottom — each selected player becomes a Single entry.
