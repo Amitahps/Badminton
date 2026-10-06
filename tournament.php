@@ -31,6 +31,63 @@ foreach ($countStmt->fetchAll() as $r) {
     $teamCounts[(int)$r['age_category_id'] . '|' . $r['event_code']] = (int)$r['team_count'];
 }
 
+// Build display rows: gender events per category; Mix Double once per age group
+$tableRows = [];
+$mixShown = [];
+foreach ($categories as $c) {
+    $scope = bm_category_gender_scope($c);
+    $events = bm_events_for_gender_scope($scope);
+    foreach ($events as $code => $def) {
+        if ($code === 'mix_double') {
+            continue; // handled once below
+        }
+        $key = (int)$c['id'] . '|' . $code;
+        $tableRows[] = [
+            'label' => $c['name'],
+            'for' => bm_gender_scope_label($scope),
+            'event_label' => $def['label'],
+            'event_code' => $code,
+            'category_id' => (int)$c['id'],
+            'teams' => (int)($teamCounts[$key] ?? 0),
+        ];
+    }
+}
+foreach ($categories as $c) {
+    $scope = bm_category_gender_scope($c);
+    $events = bm_events_for_gender_scope($scope);
+    if (!isset($events['mix_double'])) {
+        continue;
+    }
+    $group = trim((string)($c['age_group'] ?? ''));
+    $mixKey = $group !== '' ? 'g:' . mb_strtolower($group) : 'c:' . (int)$c['id'];
+    if (isset($mixShown[$mixKey])) {
+        continue;
+    }
+    $mixShown[$mixKey] = true;
+    $paired = bm_paired_category_ids($pdo, $c);
+    $teamSum = 0;
+    foreach ($paired as $pcid) {
+        $teamSum += (int)($teamCounts[$pcid . '|mix_double'] ?? 0);
+    }
+    // Prefer boys category as the open link (still pools both in teams page)
+    $linkId = (int)$c['id'];
+    foreach ($categories as $pc) {
+        if (in_array((int)$pc['id'], $paired, true) && bm_category_gender_scope($pc) === 'boys') {
+            $linkId = (int)$pc['id'];
+            break;
+        }
+    }
+    $label = $group !== '' ? $group : $c['name'];
+    $tableRows[] = [
+        'label' => $label,
+        'for' => 'Boys + Girls',
+        'event_label' => 'Mix Double',
+        'event_code' => 'mix_double',
+        'category_id' => $linkId,
+        'teams' => $teamSum,
+    ];
+}
+
 $dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
 $pageTitle = $tournament['name'] . ' · Badminton';
 require __DIR__ . '/includes/header.php';
@@ -39,7 +96,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow">Tournament</p>
     <h1><?= bm_h($tournament['name']) ?></h1>
-    <p class="lede">Held at <strong><?= bm_h($tournament['held_at']) ?></strong> on <strong><?= bm_h($dateText) ?></strong>. Boys categories show boys events only; girls categories show girls events. Mix Double lists both when age groups match.</p>
+    <p class="lede">Held at <strong><?= bm_h($tournament['held_at']) ?></strong> on <strong><?= bm_h($dateText) ?></strong>. Boys/girls events stay separate; <strong>Mix Double</strong> appears once per age group for boy + girl teams.</p>
   </div>
   <div class="page-actions">
     <a class="btn btn-primary" href="tournament-entries.php?tournament_id=<?= $id ?>">Assign players / categories / events</a>
@@ -70,23 +127,16 @@ require __DIR__ . '/includes/header.php';
       </tr>
     </thead>
     <tbody>
-    <?php foreach ($categories as $c): ?>
-      <?php
-        $scope = bm_category_gender_scope($c);
-        $events = bm_events_for_gender_scope($scope);
-      ?>
-      <?php foreach ($events as $code => $def): ?>
-        <?php $key = (int)$c['id'] . '|' . $code; ?>
-        <tr>
-          <td><strong><?= bm_h($c['name']) ?></strong></td>
-          <td><?= bm_h(bm_gender_scope_label($scope)) ?></td>
-          <td><?= bm_h($def['label']) ?></td>
-          <td><?= (int)($teamCounts[$key] ?? 0) ?></td>
-          <td class="right">
-            <a class="btn btn-sm btn-primary" href="tournament-teams.php?tournament_id=<?= $id ?>&category_id=<?= (int)$c['id'] ?>&event=<?= urlencode($code) ?>">Open &amp; form teams</a>
-          </td>
-        </tr>
-      <?php endforeach; ?>
+    <?php foreach ($tableRows as $row): ?>
+      <tr>
+        <td><strong><?= bm_h($row['label']) ?></strong></td>
+        <td><?= bm_h($row['for']) ?></td>
+        <td><?= bm_h($row['event_label']) ?></td>
+        <td><?= (int)$row['teams'] ?></td>
+        <td class="right">
+          <a class="btn btn-sm btn-primary" href="tournament-teams.php?tournament_id=<?= $id ?>&category_id=<?= (int)$row['category_id'] ?>&event=<?= urlencode($row['event_code']) ?>">Open &amp; form teams</a>
+        </td>
+      </tr>
     <?php endforeach; ?>
     </tbody>
   </table>

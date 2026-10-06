@@ -56,12 +56,21 @@ if (isset($_POST['save_entry'])) {
     } else {
         $validCat = [];
         foreach ($categories as $c) {
-            $validCat[(int)$c['id']] = true;
+            $cid = (int)$c['id'];
+            $cscope = bm_category_gender_scope($c);
+            // Boy → boys/open only; girl → girls/open only
+            if ($player['gender'] === 'boy' && $cscope === 'girls') {
+                continue;
+            }
+            if ($player['gender'] === 'girl' && $cscope === 'boys') {
+                continue;
+            }
+            $validCat[$cid] = true;
         }
         foreach ($catIds as $cid) {
             if (empty($validCat[$cid])) {
-                bm_flash('error', 'Invalid age category.');
-                bm_redirect('tournament-entries.php?tournament_id=' . $tournamentId);
+                bm_flash('error', 'Age category does not match this player’s gender.');
+                bm_redirect('tournament-entries.php?tournament_id=' . $tournamentId . '&player_id=' . $pid);
             }
         }
         $g = $player['gender'];
@@ -177,10 +186,10 @@ require __DIR__ . '/includes/header.php';
     </label>
 
     <fieldset style="border:1px solid var(--line);border-radius:10px;padding:0.75rem 1rem;margin:0.75rem 0;">
-      <legend style="font-weight:600;padding:0 0.35rem;">Age categories (select multiple)</legend>
+      <legend style="font-weight:600;padding:0 0.35rem;">Age categories (select multiple — filtered by player gender)</legend>
       <?php foreach ($categories as $c): ?>
         <?php $sc = bm_category_gender_scope($c); ?>
-        <label class="check-inline" style="display:flex;margin:0.4rem 0;font-weight:500;">
+        <label class="check-inline cat-opt" data-scope="<?= bm_h($sc) ?>" style="display:flex;margin:0.4rem 0;font-weight:500;">
           <input type="checkbox" class="cat-pick" name="category_ids[]" value="<?= (int)$c['id'] ?>"
             data-scope="<?= bm_h($sc) ?>"
             <?= in_array((int)$c['id'], $selectedCats, true) ? 'checked' : '' ?>>
@@ -215,13 +224,33 @@ require __DIR__ . '/includes/header.php';
     girls: {single:1, double_girls:1, mix_double:1},
     open: {single:1, double_men:1, double_girls:1, mix_double:1}
   };
-  function syncEvents(){
+  function playerGender(){
     var opt = sel.options[sel.selectedIndex];
-    var g = opt ? (opt.getAttribute('data-gender') || '') : '';
-    var cats = document.querySelectorAll('.cat-pick:checked');
+    return opt ? (opt.getAttribute('data-gender') || '') : '';
+  }
+  function syncCategories(){
+    var g = playerGender();
+    document.querySelectorAll('.cat-opt').forEach(function(lab){
+      var scope = lab.getAttribute('data-scope') || 'open';
+      var hide = (g === 'boy' && scope === 'girls') || (g === 'girl' && scope === 'boys');
+      var input = lab.querySelector('input');
+      lab.style.display = hide ? 'none' : 'flex';
+      if (hide) {
+        input.checked = false;
+        input.disabled = true;
+      } else {
+        input.disabled = false;
+      }
+    });
+  }
+  function syncEvents(){
+    var g = playerGender();
+    var cats = document.querySelectorAll('.cat-pick:checked:not(:disabled)');
     var allowed = {};
     if (!cats.length) {
-      allowed = {single:1, double_men:1, double_girls:1, mix_double:1};
+      if (g === 'boy') allowed = {single:1, double_men:1, mix_double:1};
+      else if (g === 'girl') allowed = {single:1, double_girls:1, mix_double:1};
+      else allowed = {single:1, double_men:1, double_girls:1, mix_double:1};
     } else {
       cats.forEach(function(c){
         var map = scopeEvents[c.getAttribute('data-scope')] || scopeEvents.open;
@@ -240,6 +269,7 @@ require __DIR__ . '/includes/header.php';
       lab.style.opacity = byGender ? '0.45' : '1';
     });
   }
+  function syncAll(){ syncCategories(); syncEvents(); }
   document.querySelectorAll('.cat-pick').forEach(function(c){
     c.addEventListener('change', syncEvents);
   });
@@ -249,9 +279,9 @@ require __DIR__ . '/includes/header.php';
       location.href = 'tournament-entries.php?tournament_id=<?= (int)$tournamentId ?>&player_id=' + encodeURIComponent(id);
       return;
     }
-    syncEvents();
+    syncAll();
   });
-  syncEvents();
+  syncAll();
 })();
 </script>
 <?php endif; ?>
