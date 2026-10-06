@@ -23,7 +23,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bai = trim((string)($_POST['bai_id'] ?? ''));
         $pbi = trim((string)($_POST['pbi_id'] ?? ''));
         $aadhaar = bm_clean_aadhaar((string)($_POST['aadhaar_no'] ?? ''));
-        $dob = trim((string)($_POST['dob'] ?? ''));
+        $dobRaw = trim((string)($_POST['dob'] ?? ''));
+        $dob = null;
+        if ($dobRaw !== '') {
+            $dob = bm_parse_date_input($dobRaw);
+        }
         $mobile = trim((string)($_POST['mobile'] ?? ''));
         $remarks = trim((string)($_POST['remarks'] ?? ''));
 
@@ -68,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $fullName, $gender,
                 $bai !== '' ? $bai : null, $pbi !== '' ? $pbi : null,
                 $aadhaar !== '' ? $aadhaar : null, $aadhaarFile,
-                $dob !== '' ? $dob : null, $dobFile,
+                $dob, $dobFile,
                 $mobile !== '' ? $mobile : null, $remarks !== '' ? $remarks : null,
                 $id,
             ]);
@@ -83,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $fullName, $gender,
                 $bai !== '' ? $bai : null, $pbi !== '' ? $pbi : null,
                 $aadhaar !== '' ? $aadhaar : null, $aadhaarFile,
-                $dob !== '' ? $dob : null, $dobFile,
+                $dob, $dobFile,
                 $mobile !== '' ? $mobile : null, $remarks !== '' ? $remarks : null,
             ]);
             bm_flash('success', 'Player added to the list. Age category and events are chosen inside each tournament.');
@@ -102,6 +106,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $pageTitle = ($id ? 'Edit' : 'Add') . ' Player · Badminton';
 require __DIR__ . '/includes/header.php';
 $gender = $row['gender'] ?? 'boy';
+$dobDisplay = '';
+if (!empty($row['dob'])) {
+    $dobDisplay = bm_fmt_date((string)$row['dob']);
+    if ($dobDisplay === '—') {
+        $dobDisplay = (string)$row['dob'];
+    }
+} elseif (!empty($_POST['dob'])) {
+    $dobDisplay = trim((string)$_POST['dob']);
+}
 ?>
 <section class="page-head">
   <div>
@@ -113,7 +126,7 @@ $gender = $row['gender'] ?? 'boy';
 <section class="panel">
   <form method="post" enctype="multipart/form-data" class="form form-grid">
     <label>Player name
-      <input type="text" name="full_name" required maxlength="160" value="<?= bm_h($row['full_name'] ?? '') ?>">
+      <input type="text" name="full_name" required maxlength="160" value="<?= bm_h($row['full_name'] ?? ($_POST['full_name'] ?? '')) ?>">
     </label>
     <label>Gender
       <select name="gender" required>
@@ -126,7 +139,9 @@ $gender = $row['gender'] ?? 'boy';
     <label>Aadhaar number
       <input type="text" name="aadhaar_no" inputmode="numeric" maxlength="14" value="<?= bm_h($row['aadhaar_no'] ?? '') ?>" placeholder="12 digits">
     </label>
-    <label>Date of birth<input type="date" name="dob" value="<?= bm_h($row['dob'] ?? '') ?>"></label>
+    <label>Date of birth (dd-mm-yyyy)
+      <input type="text" name="dob" inputmode="numeric" maxlength="10" placeholder="dd-mm-yyyy" value="<?= bm_h($dobDisplay) ?>">
+    </label>
     <label>Mobile<input type="text" name="mobile" maxlength="20" value="<?= bm_h($row['mobile'] ?? '') ?>"></label>
     <label class="span-2">Aadhaar card file (PDF/image)
       <input type="file" name="aadhaar_file" accept=".pdf,.png,.jpg,.jpeg,.webp">

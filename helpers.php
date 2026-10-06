@@ -78,10 +78,38 @@ function bm_logout(): void
 function bm_fmt_date(?string $ymd): string
 {
     if (!$ymd) {
-        return '__________';
+        return '—';
     }
+    $ymd = trim($ymd);
     $dt = DateTime::createFromFormat('Y-m-d', $ymd);
-    return $dt ? $dt->format('d-m-Y') : $ymd;
+    if ($dt instanceof DateTime) {
+        return $dt->format('d-m-Y');
+    }
+    // Already day-month-year
+    $dt2 = DateTime::createFromFormat('d-m-Y', $ymd);
+    if ($dt2 instanceof DateTime) {
+        return $dt2->format('d-m-Y');
+    }
+    return $ymd;
+}
+
+/** Parse user date (dd-mm-yyyy or yyyy-mm-dd) to Y-m-d for DB storage. */
+function bm_parse_date_input(?string $raw): ?string
+{
+    $raw = trim((string)$raw);
+    if ($raw === '') {
+        return null;
+    }
+    foreach (['d-m-Y', 'd/m/Y', 'Y-m-d'] as $fmt) {
+        $dt = DateTime::createFromFormat('!' . $fmt, $raw);
+        if ($dt instanceof DateTime) {
+            $errors = DateTime::getLastErrors();
+            if (($errors['warning_count'] ?? 0) === 0 && ($errors['error_count'] ?? 0) === 0) {
+                return $dt->format('Y-m-d');
+            }
+        }
+    }
+    throw new RuntimeException('Invalid date. Use day-month-year (dd-mm-yyyy), e.g. 15-03-2012.');
 }
 
 function bm_date_range(string $from, string $to): string

@@ -167,7 +167,7 @@ if ($fmt === 'csv') {
                     $p['bai_id'] ?: '',
                     $p['pbi_id'] ?: '',
                     $p['aadhaar_no'] ?: '',
-                    $p['dob'] ?: '',
+                    $p['dob'] ? bm_fmt_date($p['dob']) : '',
                 ]);
             }
         }
@@ -209,8 +209,8 @@ require __DIR__ . '/includes/header.php';
   <div class="panel-head"><h2>Edit letter</h2></div>
   <form method="post" class="form">
     <input type="hidden" name="id" value="<?= $id ?>">
-    <label>Date
-      <input type="text" name="letter_date" value="<?= bm_h($letterDate) ?>" maxlength="40">
+    <label>Date (dd-mm-yyyy)
+      <input type="text" name="letter_date" value="<?= bm_h($letterDate) ?>" maxlength="40" placeholder="dd-mm-yyyy">
     </label>
     <label>To (editable — send to anyone)
       <textarea name="letter_to" rows="4" required><?= bm_h($letterTo) ?></textarea>
@@ -265,7 +265,7 @@ require __DIR__ . '/includes/header.php';
                 <td><?= bm_h($p['bai_id'] ?: '—') ?></td>
                 <td><?= bm_h($p['pbi_id'] ?: '—') ?></td>
                 <td><?= bm_h($p['aadhaar_no'] ?: '—') ?></td>
-                <td><?= bm_h($p['dob'] ?: '—') ?></td>
+                <td><?= bm_h(!empty($p['dob']) ? bm_fmt_date($p['dob']) : '—') ?></td>
               </tr>
               <?php endforeach; ?>
             <?php endforeach; ?>
