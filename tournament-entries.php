@@ -82,7 +82,7 @@ if (isset($_POST['save_entry'])) {
                 break;
             }
             if ($code === 'double_men' && $g !== 'boy') {
-                bm_flash('error', 'Double Men is for boys only.');
+                bm_flash('error', 'Double Boys is for boys only.');
                 $ok = false;
                 break;
             }
@@ -177,7 +177,7 @@ require __DIR__ . '/includes/header.php';
       <select name="player_id" id="player_id" required>
         <option value="">Select player</option>
         <?php foreach ($allPlayers as $p): ?>
-          <option value="<?= (int)$p['id'] ?>" data-gender="<?= bm_h($p['gender']) ?>"
+          <option value="<?= (int)$p['id'] ?>" data-gender="<?= bm_h(strtolower(trim((string)($p['gender'] ?? '')))) ?>"
             <?= $formPlayerId === (int)$p['id'] ? 'selected' : '' ?>>
             <?= bm_h($p['full_name']) ?> (<?= bm_h(bm_gender_label($p['gender'])) ?>)
           </option>

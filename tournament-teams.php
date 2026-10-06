@@ -98,7 +98,7 @@ function bm_validate_and_create_team(PDO $pdo, int $tournamentId, int $catId, st
     if ($event === 'double_men') {
         foreach ($genders as $g) {
             if ($g !== 'boy') {
-                throw new RuntimeException('Double Men team must be 2 boys.');
+                throw new RuntimeException('Double Boys team must be 2 boys.');
             }
         }
     } elseif ($event === 'double_girls') {

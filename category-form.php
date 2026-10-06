@@ -76,7 +76,7 @@ require __DIR__ . '/includes/header.php';
     </label>
     <label>For (gender)
       <select name="gender_scope" required>
-        <option value="boys" <?= $scope === 'boys' ? 'selected' : '' ?>>Boys — Single, Double Men, Mix Double</option>
+        <option value="boys" <?= $scope === 'boys' ? 'selected' : '' ?>>Boys — Single, Double Boys, Mix Double</option>
         <option value="girls" <?= $scope === 'girls' ? 'selected' : '' ?>>Girls — Single, Double Girls, Mix Double</option>
         <option value="open" <?= $scope === 'open' ? 'selected' : '' ?>>Open — all events</option>
       </select>
