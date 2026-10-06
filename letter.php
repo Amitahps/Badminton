@@ -42,7 +42,7 @@ if ($letterSign === '') {
     $letterSign = $defaultSign;
 }
 
-// Group teams by category then event
+// Flat letter sections: "Under 13 Boys Singles", "Under 15 Mix Double" (mix not under Boys/Girls)
 $cats = $pdo->prepare("
     SELECT DISTINCT c.*
     FROM age_categories c
@@ -52,9 +52,9 @@ $cats = $pdo->prepare("
 ");
 $cats->execute([$id]);
 $categories = $cats->fetchAll();
-$grouped = [];
+$sections = [];
+$mixSeen = [];
 foreach ($categories as $cat) {
-    $eventsBlock = [];
     $allowed = bm_events_for_gender_scope(bm_category_gender_scope($cat));
     foreach ($allowed as $code => $def) {
         $ts = $pdo->prepare("
@@ -78,12 +78,33 @@ foreach ($categories as $cat) {
             $team['members'] = $ms->fetchAll();
         }
         unset($team);
-        $eventsBlock[] = ['event' => $code, 'label' => $def['label'], 'teams' => $teams];
-    }
-    if ($eventsBlock) {
-        $grouped[] = ['category' => $cat, 'events' => $eventsBlock];
+
+        $heading = bm_letter_heading($cat, $code);
+        if ($code === 'mix_double') {
+            $group = trim((string)($cat['age_group'] ?? ''));
+            if ($group === '') {
+                $group = bm_infer_category_meta($cat['name'])['age_group'];
+            }
+            $mixKey = $group !== '' ? 'g:' . mb_strtolower($group) : 'c:' . (int)$cat['id'];
+            if (isset($mixSeen[$mixKey])) {
+                // Merge teams into the first Mix Double section for this age group
+                $sections[$mixSeen[$mixKey]]['teams'] = array_merge($sections[$mixSeen[$mixKey]]['teams'], $teams);
+                continue;
+            }
+            $mixSeen[$mixKey] = count($sections);
+        }
+
+        $sections[] = [
+            'heading' => $heading,
+            'event' => $code,
+            'label' => $def['label'],
+            'category_name' => $cat['name'],
+            'teams' => $teams,
+        ];
     }
 }
+// Keep $grouped for any legacy reference → map to sections shape used below
+$grouped = $sections;
 
 $heldAt = $tournament['held_at'];
 $dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
@@ -94,23 +115,20 @@ if ($fmt === 'csv') {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="participants_' . preg_replace('/[^A-Za-z0-9_-]+/', '_', $tournament['name']) . '.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['Category', 'Event', 'Team No', 'Player Name', 'Gender', 'BAI ID', 'PBI ID', 'Aadhaar', 'DOB']);
+    fputcsv($out, ['Section', 'Team No', 'Player Name', 'Gender', 'BAI ID', 'PBI ID', 'Aadhaar', 'DOB']);
     foreach ($grouped as $block) {
-        foreach ($block['events'] as $ev) {
-            foreach ($ev['teams'] as $ti => $team) {
-                foreach ($team['members'] as $p) {
-                    fputcsv($out, [
-                        $block['category']['name'],
-                        $ev['label'],
-                        $ti + 1,
-                        $p['full_name'],
-                        bm_gender_label($p['gender']),
-                        $p['bai_id'] ?: '',
-                        $p['pbi_id'] ?: '',
-                        $p['aadhaar_no'] ?: '',
-                        $p['dob'] ?: '',
-                    ]);
-                }
+        foreach ($block['teams'] as $ti => $team) {
+            foreach ($team['members'] as $p) {
+                fputcsv($out, [
+                    $block['heading'],
+                    $ti + 1,
+                    $p['full_name'],
+                    bm_gender_label($p['gender']),
+                    $p['bai_id'] ?: '',
+                    $p['pbi_id'] ?: '',
+                    $p['aadhaar_no'] ?: '',
+                    $p['dob'] ?: '',
+                ]);
             }
         }
     }

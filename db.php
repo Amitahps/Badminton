@@ -396,7 +396,7 @@ function bm_event_defs(): array
             'rule' => 'one',
         ],
         'double_men' => [
-            'label' => 'Double Men',
+            'label' => 'Double Boys',
             'team_size' => 2,
             'genders' => ['boy'],
             'rule' => 'same',
@@ -481,6 +481,36 @@ function bm_event_label(?string $code): string
 {
     $defs = bm_event_defs();
     return $defs[$code]['label'] ?? (string)$code;
+}
+
+/**
+ * Letter / export heading, e.g. "Under 13 Boys Singles", "Under 15 Mix Double".
+ * Mix Double uses age group only (not Boys/Girls).
+ */
+function bm_letter_heading(array $category, string $eventCode): string
+{
+    $name = trim((string)($category['name'] ?? ''));
+    $group = trim((string)($category['age_group'] ?? ''));
+    if ($group === '') {
+        $group = bm_infer_category_meta($name)['age_group'];
+    }
+
+    if ($eventCode === 'mix_double') {
+        $base = $group !== '' ? $group : trim(preg_replace('/\b(boys?|girls?|men|women)\b/iu', '', $name) ?? '');
+        $base = trim(preg_replace('/\s{2,}/', ' ', $base) ?? '');
+        return trim($base . ' Mix Double');
+    }
+
+    $suffix = 'Event';
+    if ($eventCode === 'single') {
+        $suffix = 'Singles';
+    } elseif ($eventCode === 'double_men' || $eventCode === 'double_girls') {
+        $suffix = 'Double';
+    } else {
+        $suffix = bm_event_label($eventCode);
+    }
+
+    return trim($name . ' ' . $suffix);
 }
 
 function bm_gender_label(?string $g): string
