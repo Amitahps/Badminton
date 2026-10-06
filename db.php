@@ -243,20 +243,24 @@ function bm_migrate_schema(PDO $pdo): void
         if (!bm_column_exists($pdo, 'age_categories', 'age_group')) {
             $pdo->exec('ALTER TABLE age_categories ADD COLUMN age_group TEXT');
         }
-        // Infer boys/girls from existing names when still open
+        // Infer / repair boys/girls from category names
         $cats = $pdo->query("SELECT id, name, gender_scope, age_group FROM age_categories")->fetchAll();
         $upd = $pdo->prepare('UPDATE age_categories SET gender_scope=?, age_group=? WHERE id=?');
         foreach ($cats as $c) {
-            $scope = $c['gender_scope'] ?: 'open';
+            $scope = strtolower(trim((string)($c['gender_scope'] ?: 'open')));
+            if (!in_array($scope, ['boys', 'girls', 'open'], true)) {
+                $scope = 'open';
+            }
             $group = $c['age_group'];
             $inferred = bm_infer_category_meta($c['name']);
-            if ($scope === 'open' && $inferred['gender_scope'] !== 'open') {
+            // Trust clear name signal (fixes Girls categories wrongly saved as Boys)
+            if ($inferred['gender_scope'] === 'girls' || $inferred['gender_scope'] === 'boys') {
                 $scope = $inferred['gender_scope'];
             }
             if (($group === null || $group === '') && $inferred['age_group'] !== '') {
                 $group = $inferred['age_group'];
             }
-            $upd->execute([$scope, $group !== '' ? $group : null, (int)$c['id']]);
+            $upd->execute([$scope, $group !== '' && $group !== null ? $group : null, (int)$c['id']]);
         }
     }
 
@@ -415,14 +419,15 @@ function bm_event_defs(): array
 /** Guess boys/girls + age group from a category name like "Under 14 Boys". */
 function bm_infer_category_meta(string $name): array
 {
-    $n = strtolower($name);
+    $n = strtolower(trim($name));
     $scope = 'open';
-    if (preg_match('/\b(boys?|men|male)\b/', $n)) {
-        $scope = 'boys';
-    } elseif (preg_match('/\b(girls?|women|female|ladies)\b/', $n)) {
+    // Girls first: "female" contains "male", "women" contains "men"
+    if (preg_match('/\b(girls?|women|female|ladies)\b/u', $n) || strpos($n, 'girl') !== false) {
         $scope = 'girls';
+    } elseif (preg_match('/\b(boys?|men|male)\b/u', $n) || strpos($n, 'boy') !== false) {
+        $scope = 'boys';
     }
-    $group = trim(preg_replace('/\b(boys?|girls?|men|women|male|female|ladies)\b/i', '', $name) ?? '');
+    $group = trim(preg_replace('/\b(boys?|girls?|men|women|male|female|ladies)\b/iu', '', $name) ?? '');
     $group = trim(preg_replace('/\s{2,}/', ' ', $group) ?? '');
     $group = trim($group, " -\t");
     return ['gender_scope' => $scope, 'age_group' => $group];

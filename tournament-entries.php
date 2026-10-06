@@ -133,13 +133,13 @@ foreach ($entryRows->fetchAll() as $r) {
 $selectedCats = [];
 $selectedEvents = [];
 $formPlayerId = $editPlayerId;
-$formGender = 'boy';
+$formGender = '';
 if ($editPlayerId > 0) {
     $selectedCats = bm_tournament_entry_categories($pdo, $tournamentId, $editPlayerId);
     $selectedEvents = bm_tournament_entry_events($pdo, $tournamentId, $editPlayerId);
     foreach ($allPlayers as $p) {
         if ((int)$p['id'] === $editPlayerId) {
-            $formGender = $p['gender'];
+            $formGender = strtolower(trim((string)($p['gender'] ?? '')));
             break;
         }
     }
@@ -187,8 +187,19 @@ require __DIR__ . '/includes/header.php';
 
     <fieldset style="border:1px solid var(--line);border-radius:10px;padding:0.75rem 1rem;margin:0.75rem 0;">
       <legend style="font-weight:600;padding:0 0.35rem;">Age categories (select multiple — filtered by player gender)</legend>
-      <?php foreach ($categories as $c): ?>
-        <?php $sc = bm_category_gender_scope($c); ?>
+      <?php
+        $visibleCatCount = 0;
+        foreach ($categories as $c):
+          $sc = bm_category_gender_scope($c);
+          // Server-side filter: boy → hide girls cats; girl → hide boys cats
+          if ($formGender === 'boy' && $sc === 'girls') {
+              continue;
+          }
+          if ($formGender === 'girl' && $sc === 'boys') {
+              continue;
+          }
+          $visibleCatCount++;
+      ?>
         <label class="check-inline cat-opt" data-scope="<?= bm_h($sc) ?>" style="display:flex;margin:0.4rem 0;font-weight:500;">
           <input type="checkbox" class="cat-pick" name="category_ids[]" value="<?= (int)$c['id'] ?>"
             data-scope="<?= bm_h($sc) ?>"
@@ -197,6 +208,11 @@ require __DIR__ . '/includes/header.php';
           <span class="muted"> (<?= bm_h(bm_gender_scope_label($sc)) ?>)</span>
         </label>
       <?php endforeach; ?>
+      <?php if ($formGender !== '' && $visibleCatCount === 0): ?>
+        <p class="empty" style="margin:0.5rem 0 0;">No <?= $formGender === 'girl' ? 'girls' : 'boys' ?> age categories found. Create one under Age Categories (set For = <?= $formGender === 'girl' ? 'Girls' : 'Boys' ?>).</p>
+      <?php elseif ($formGender === ''): ?>
+        <p class="hint" style="margin:0.35rem 0 0;">Select a player first — only matching boys or girls categories will stay visible.</p>
+      <?php endif; ?>
     </fieldset>
 
     <fieldset style="border:1px solid var(--line);border-radius:10px;padding:0.75rem 1rem;margin:0.75rem 0;">
@@ -226,12 +242,12 @@ require __DIR__ . '/includes/header.php';
   };
   function playerGender(){
     var opt = sel.options[sel.selectedIndex];
-    return opt ? (opt.getAttribute('data-gender') || '') : '';
+    return opt ? String(opt.getAttribute('data-gender') || '').trim().toLowerCase() : '';
   }
   function syncCategories(){
     var g = playerGender();
     document.querySelectorAll('.cat-opt').forEach(function(lab){
-      var scope = lab.getAttribute('data-scope') || 'open';
+      var scope = String(lab.getAttribute('data-scope') || 'open').trim().toLowerCase();
       var hide = (g === 'boy' && scope === 'girls') || (g === 'girl' && scope === 'boys');
       var input = lab.querySelector('input');
       lab.style.display = hide ? 'none' : 'flex';
@@ -253,7 +269,7 @@ require __DIR__ . '/includes/header.php';
       else allowed = {single:1, double_men:1, double_girls:1, mix_double:1};
     } else {
       cats.forEach(function(c){
-        var map = scopeEvents[c.getAttribute('data-scope')] || scopeEvents.open;
+        var map = scopeEvents[String(c.getAttribute('data-scope') || 'open').trim().toLowerCase()] || scopeEvents.open;
         Object.keys(map).forEach(function(k){ allowed[k] = 1; });
       });
     }

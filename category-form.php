@@ -48,8 +48,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$scope = $row['gender_scope'] ?? 'boys';
+$scope = $row['gender_scope'] ?? '';
+if ($scope === '' && !empty($row['name'])) {
+    $scope = bm_infer_category_meta((string)$row['name'])['gender_scope'];
+}
+if ($scope === '') {
+    $scope = 'open';
+}
 $ageGroup = $row['age_group'] ?? '';
+if ($ageGroup === '' && !empty($row['name'])) {
+    $ageGroup = bm_infer_category_meta((string)$row['name'])['age_group'];
+}
 $pageTitle = ($id ? 'Edit' : 'Create') . ' Age Category · Badminton';
 require __DIR__ . '/includes/header.php';
 ?>
