@@ -156,7 +156,8 @@ require __DIR__ . '/includes/header.php';
     <p class="lede">Edit the “To” address below so this letter can go to Punjab Badminton Association or anyone else.</p>
   </div>
   <div class="page-actions">
-    <button type="button" class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
+    <button type="button" class="btn btn-primary" id="copy-letter">Copy letter</button>
+    <button type="button" class="btn" onclick="window.print()">Print / Save as PDF</button>
     <a class="btn" href="letter.php?id=<?= $id ?>&format=csv">Download CSV</a>
     <a class="btn" href="tournament.php?id=<?= $id ?>">Back</a>
   </div>
@@ -187,9 +188,7 @@ require __DIR__ . '/includes/header.php';
   <?php if ($grouped): ?>
     <?php foreach ($grouped as $block): ?>
       <section class="letter-category">
-        <h2><?= bm_h($block['category']['name']) ?></h2>
-        <?php foreach ($block['events'] as $ev): ?>
-          <h3 style="margin:0.75rem 0 0.35rem;font-size:1.05rem;"><?= bm_h($ev['label']) ?></h3>
+        <h2><?= bm_h($block['heading']) ?></h2>
           <table class="letter-table">
             <thead>
               <tr>
@@ -203,7 +202,7 @@ require __DIR__ . '/includes/header.php';
               </tr>
             </thead>
             <tbody>
-            <?php foreach ($ev['teams'] as $ti => $team): ?>
+            <?php foreach ($block['teams'] as $ti => $team): ?>
               <?php foreach ($team['members'] as $mi => $p): ?>
               <tr>
                 <?php if ($mi === 0): ?>
@@ -220,7 +219,6 @@ require __DIR__ . '/includes/header.php';
             <?php endforeach; ?>
             </tbody>
           </table>
-        <?php endforeach; ?>
       </section>
     <?php endforeach; ?>
   <?php else: ?>
