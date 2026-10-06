@@ -52,7 +52,7 @@ require __DIR__ . '/includes/header.php';
 </section>
 <section class="panel">
   <form method="get" class="filters">
-    <input type="search" name="q" value="<?= bm_h($q) ?>" placeholder="Search name / BAI / PBI">
+    <input type="search" name="q" value="<?= bm_h($q) ?>" placeholder="Search name / BAI / PBA">
     <select name="gender">
       <option value="">All genders</option>
       <option value="boy" <?= $genderFilter === 'boy' ? 'selected' : '' ?>>Boy</option>
@@ -67,7 +67,7 @@ require __DIR__ . '/includes/header.php';
       <tr>
         <th>Name</th>
         <th>Gender</th>
-        <th>BAI / PBI</th>
+        <th>BAI / PBA</th>
         <th>Mobile</th>
         <th></th>
       </tr>

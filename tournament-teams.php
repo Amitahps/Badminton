@@ -308,7 +308,7 @@ require __DIR__ . '/includes/header.php';
         <button type="button" class="btn btn-sm" id="clear-all">Clear</button>
       </p>
       <table class="table">
-        <thead><tr><th class="check-col">Select</th><th>Name</th><th>Gender</th><th>BAI</th><th>PBI</th></tr></thead>
+        <thead><tr><th class="check-col">Select</th><th>Name</th><th>Gender</th><th>BAI</th><th>PBA</th></tr></thead>
         <tbody>
         <?php foreach ($available as $p): ?>
           <tr>
@@ -329,7 +329,7 @@ require __DIR__ . '/includes/header.php';
       </div>
       <p class="hint">Tick exactly 2 players, then Lock team. Repeat. Save once below.</p>
       <table class="table">
-        <thead><tr><th class="check-col">Select</th><th>Name</th><th>Gender</th><th>BAI</th><th>PBI</th></tr></thead>
+        <thead><tr><th class="check-col">Select</th><th>Name</th><th>Gender</th><th>BAI</th><th>PBA</th></tr></thead>
         <tbody>
         <?php foreach ($available as $p): ?>
           <tr data-player-row="<?= (int)$p['id'] ?>">

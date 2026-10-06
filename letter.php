@@ -155,7 +155,7 @@ if ($fmt === 'csv') {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="participants_' . preg_replace('/[^A-Za-z0-9_-]+/', '_', $tournament['name']) . '.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['Section', 'Team No', 'Player Name', 'Gender', 'BAI ID', 'PBI ID', 'Aadhaar', 'DOB']);
+    fputcsv($out, ['Section', 'Team No', 'Player Name', 'Gender', 'BAI ID', 'PBA ID', 'Aadhaar', 'DOB']);
     foreach ($grouped as $block) {
         foreach ($block['teams'] as $ti => $team) {
             foreach ($team['members'] as $p) {
@@ -248,7 +248,7 @@ require __DIR__ . '/includes/header.php';
                 <th>Player Name(s)</th>
                 <th>Gender</th>
                 <th>BAI ID</th>
-                <th>PBI ID</th>
+                <th>PBA ID</th>
                 <th>Aadhaar</th>
                 <th>DOB</th>
               </tr>

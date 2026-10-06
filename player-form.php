@@ -122,7 +122,7 @@ $gender = $row['gender'] ?? 'boy';
       </select>
     </label>
     <label>BAI ID<input type="text" name="bai_id" maxlength="80" value="<?= bm_h($row['bai_id'] ?? '') ?>"></label>
-    <label>PBI ID<input type="text" name="pbi_id" maxlength="80" value="<?= bm_h($row['pbi_id'] ?? '') ?>"></label>
+    <label>PBA ID<input type="text" name="pbi_id" maxlength="80" value="<?= bm_h($row['pbi_id'] ?? '') ?>"></label>
     <label>Aadhaar number
       <input type="text" name="aadhaar_no" inputmode="numeric" maxlength="14" value="<?= bm_h($row['aadhaar_no'] ?? '') ?>" placeholder="12 digits">
     </label>
