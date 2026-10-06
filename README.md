@@ -10,12 +10,11 @@ Do **not** put this code inside `school-fee-erp`.
 ## What this website does
 
 1. Admin login  
-2. Create age categories  
-3. Add players (name, gender, docs) — no category/event on create  
-4. Assign age category + **one or more events** (Single / Double Men / Double Girls / Mix Double)  
-   - Same player can play in multiple events in a tournament  
-5. Create tournament (name, held at, from–to dates)  
-6. Form teams per category + event (1 or 2 players by event rules)  
+2. Create age categories (master list)  
+3. Add players once (name, gender, docs) — no category/event on the player list  
+4. Create a tournament  
+5. Inside that tournament: assign each player to **one or more age categories** and **one or more events** (asked again for every tournament)  
+6. Form teams per category + event  
 7. Export participating letter / CSV  
 8. Backup database + source code  
 

@@ -86,9 +86,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $dob !== '' ? $dob : null, $dobFile,
                 $mobile !== '' ? $mobile : null, $remarks !== '' ? $remarks : null,
             ]);
-            $newId = (int)$pdo->lastInsertId();
-            bm_flash('success', 'Player created. Now select Age Category and Event.');
-            bm_redirect('player-assign.php?id=' . $newId);
+            bm_flash('success', 'Player added to the list. Age category and events are chosen inside each tournament.');
+            bm_redirect('players.php');
         }
     } catch (Throwable $e) {
         bm_flash('error', $e->getMessage());
@@ -108,7 +107,7 @@ $gender = $row['gender'] ?? 'boy';
   <div>
     <p class="eyebrow">Player</p>
     <h1><?= $id ? 'Edit player' : 'Create player' ?></h1>
-    <p class="lede">Enter player name and details. Age category and event are selected in the next step.</p>
+    <p class="lede">Enter player name and details once. Age categories and events are decided later inside each tournament.</p>
   </div>
 </section>
 <section class="panel">
@@ -147,7 +146,7 @@ $gender = $row['gender'] ?? 'boy';
     </label>
     <label class="span-2">Remarks<textarea name="remarks" rows="3"><?= bm_h($row['remarks'] ?? '') ?></textarea></label>
     <div class="form-actions span-2">
-      <button type="submit" class="btn btn-primary"><?= $id ? 'Save player' : 'Create & select category / event' ?></button>
+      <button type="submit" class="btn btn-primary"><?= $id ? 'Save player' : 'Save player' ?></button>
       <a class="btn" href="players.php">Cancel</a>
     </div>
   </form>

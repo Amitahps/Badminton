@@ -6,7 +6,7 @@ $pdo = bm_db();
 
 $stats = [
     'categories' => (int)$pdo->query('SELECT COUNT(*) FROM age_categories')->fetchColumn(),
-    'players' => (int)$pdo->query("SELECT COUNT(*) FROM players p WHERE p.age_category_id IS NOT NULL AND EXISTS (SELECT 1 FROM player_events pe WHERE pe.player_id = p.id)")->fetchColumn(),
+    'players' => (int)$pdo->query('SELECT COUNT(*) FROM players')->fetchColumn(),
     'tournaments' => (int)$pdo->query('SELECT COUNT(*) FROM tournaments')->fetchColumn(),
 ];
 $recent = $pdo->query("
@@ -24,7 +24,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow">Admin desk</p>
     <h1>Tournament entry</h1>
-    <p class="lede">Create players, assign age category and one or more events (same player can enter multiple events), form tournament teams (Single / Double Men / Double Girls / Mix Double), then export the participating list.</p>
+    <p class="lede">Keep a one-time player name list. For each tournament, choose which players join which age categories and events, form teams, then export the participating list.</p>
   </div>
   <div class="page-actions">
     <a class="btn btn-primary" href="tournament-form.php">New tournament</a>
@@ -34,7 +34,7 @@ require __DIR__ . '/includes/header.php';
 
 <section class="stat-row">
   <div class="stat"><span><?= $stats['categories'] ?></span><small>Age categories</small></div>
-  <div class="stat"><span><?= $stats['players'] ?></span><small>Assigned players</small></div>
+  <div class="stat"><span><?= $stats['players'] ?></span><small>Players (name list)</small></div>
   <div class="stat"><span><?= $stats['tournaments'] ?></span><small>Tournaments</small></div>
 </section>
 
@@ -61,7 +61,7 @@ require __DIR__ . '/includes/header.php';
     </tbody>
   </table>
   <?php else: ?>
-  <p class="empty">No tournament yet. Create one, then form teams by category and event.</p>
+  <p class="empty">No tournament yet. Create one, assign players to categories/events for that tournament, then form teams.</p>
   <?php endif; ?>
 </section>
 <?php require __DIR__ . '/includes/footer.php'; ?>

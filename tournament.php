@@ -16,6 +16,10 @@ if (!$tournament) {
 $categories = $pdo->query('SELECT * FROM age_categories ORDER BY sort_order, name')->fetchAll();
 $events = bm_event_defs();
 
+$ecStmt = $pdo->prepare('SELECT COUNT(DISTINCT player_id) FROM tournament_entries WHERE tournament_id = ?');
+$ecStmt->execute([$id]);
+$entryPlayerCount = (int)$ecStmt->fetchColumn();
+
 // Team counts per category+event
 $countStmt = $pdo->prepare("
     SELECT age_category_id, event_code, COUNT(*) AS team_count
@@ -37,17 +41,26 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow">Tournament</p>
     <h1><?= bm_h($tournament['name']) ?></h1>
-    <p class="lede">Held at <strong><?= bm_h($tournament['held_at']) ?></strong> on <strong><?= bm_h($dateText) ?></strong>. Open a category + event, form teams (Single = 1 player, Doubles = 2 players). Teams can be changed anytime.</p>
+    <p class="lede">Held at <strong><?= bm_h($tournament['held_at']) ?></strong> on <strong><?= bm_h($dateText) ?></strong>. First assign which players play which age categories and events <em>in this tournament</em>, then form teams.</p>
   </div>
   <div class="page-actions">
-    <a class="btn btn-primary" href="letter.php?id=<?= $id ?>">Export participating list</a>
+    <a class="btn btn-primary" href="tournament-entries.php?tournament_id=<?= $id ?>">Assign players / categories / events</a>
+    <a class="btn" href="letter.php?id=<?= $id ?>">Export list</a>
     <a class="btn" href="tournament-form.php?id=<?= $id ?>">Edit details</a>
   </div>
 </section>
 
+<section class="stat-row">
+  <div class="stat"><span><?= $entryPlayerCount ?></span><small>Players entered here</small></div>
+</section>
+
 <section class="panel">
   <div class="panel-head"><h2>Form teams by age category &amp; event</h2></div>
-  <?php if ($categories): ?>
+  <?php if (!$categories): ?>
+  <p class="empty">Create age categories first. <a href="category-form.php">Create category</a></p>
+  <?php elseif ($entryPlayerCount === 0): ?>
+  <p class="empty">No players assigned for this tournament yet. <a href="tournament-entries.php?tournament_id=<?= $id ?>">Assign players, age categories and events</a> first.</p>
+  <?php else: ?>
   <table class="table">
     <thead>
       <tr>
@@ -73,8 +86,6 @@ require __DIR__ . '/includes/header.php';
     <?php endforeach; ?>
     </tbody>
   </table>
-  <?php else: ?>
-  <p class="empty">Create age categories and assign players to category + event first.</p>
   <?php endif; ?>
 </section>
 <?php require __DIR__ . '/includes/footer.php'; ?>

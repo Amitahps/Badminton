@@ -149,6 +149,20 @@ function bm_init_schema(PDO $pdo): void
             UNIQUE(player_id, event_code),
             FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
         );
+
+        -- Per-tournament: a player may join many age categories and many events
+        CREATE TABLE IF NOT EXISTS tournament_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tournament_id INTEGER NOT NULL,
+            player_id INTEGER NOT NULL,
+            age_category_id INTEGER NOT NULL,
+            event_code TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE(tournament_id, player_id, age_category_id, event_code),
+            FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
+            FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
+            FOREIGN KEY (age_category_id) REFERENCES age_categories(id) ON DELETE RESTRICT
+        );
     ");
 }
 
@@ -184,6 +198,18 @@ function bm_migrate_schema(PDO $pdo): void
             UNIQUE(player_id, event_code),
             FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS tournament_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tournament_id INTEGER NOT NULL,
+            player_id INTEGER NOT NULL,
+            age_category_id INTEGER NOT NULL,
+            event_code TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE(tournament_id, player_id, age_category_id, event_code),
+            FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
+            FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
+            FOREIGN KEY (age_category_id) REFERENCES age_categories(id) ON DELETE RESTRICT
+        );
     ");
 
     if (bm_table_exists($pdo, 'players')) {
@@ -198,7 +224,7 @@ function bm_migrate_schema(PDO $pdo): void
                 $pdo->exec("UPDATE players SET event_code='double_men' WHERE play_type='double' AND (event_code IS NULL OR event_code='')");
             }
         }
-        // Migrate single event_code → player_events (multi-event support)
+        // Legacy: keep player_events in sync for old DBs (not used for new tournament flow)
         $rows = $pdo->query("SELECT id, event_code FROM players WHERE event_code IS NOT NULL AND event_code != ''")->fetchAll();
         $ins = $pdo->prepare('INSERT OR IGNORE INTO player_events (player_id, event_code) VALUES (?, ?)');
         foreach ($rows as $r) {
@@ -207,6 +233,67 @@ function bm_migrate_schema(PDO $pdo): void
     }
 }
 
+/** Events assigned to a player inside one tournament. */
+function bm_tournament_entry_events(PDO $pdo, int $tournamentId, int $playerId): array
+{
+    $st = $pdo->prepare('SELECT DISTINCT event_code FROM tournament_entries WHERE tournament_id=? AND player_id=? ORDER BY event_code');
+    $st->execute([$tournamentId, $playerId]);
+    return array_column($st->fetchAll(), 'event_code');
+}
+
+/** Age categories assigned to a player inside one tournament. */
+function bm_tournament_entry_categories(PDO $pdo, int $tournamentId, int $playerId): array
+{
+    $st = $pdo->prepare('SELECT DISTINCT age_category_id FROM tournament_entries WHERE tournament_id=? AND player_id=? ORDER BY age_category_id');
+    $st->execute([$tournamentId, $playerId]);
+    return array_map('intval', array_column($st->fetchAll(), 'age_category_id'));
+}
+
+function bm_tournament_has_entry(PDO $pdo, int $tournamentId, int $playerId, int $categoryId, string $eventCode): bool
+{
+    $st = $pdo->prepare('SELECT 1 FROM tournament_entries WHERE tournament_id=? AND player_id=? AND age_category_id=? AND event_code=? LIMIT 1');
+    $st->execute([$tournamentId, $playerId, $categoryId, $eventCode]);
+    return (bool)$st->fetch();
+}
+
+/**
+ * Replace a player's category×event entries for one tournament.
+ * Same player may join multiple age categories and multiple events in this tournament only.
+ */
+function bm_set_tournament_player_entries(PDO $pdo, int $tournamentId, int $playerId, array $categoryIds, array $eventCodes): void
+{
+    $pdo->prepare('DELETE FROM tournament_entries WHERE tournament_id=? AND player_id=?')
+        ->execute([$tournamentId, $playerId]);
+    $defs = bm_event_defs();
+    $ins = $pdo->prepare('INSERT INTO tournament_entries (tournament_id, player_id, age_category_id, event_code) VALUES (?,?,?,?)');
+    $cats = [];
+    foreach ($categoryIds as $cid) {
+        $cid = (int)$cid;
+        if ($cid > 0) {
+            $cats[$cid] = true;
+        }
+    }
+    $evs = [];
+    foreach ($eventCodes as $code) {
+        $code = trim((string)$code);
+        if (isset($defs[$code])) {
+            $evs[$code] = true;
+        }
+    }
+    foreach (array_keys($cats) as $cid) {
+        foreach (array_keys($evs) as $code) {
+            $ins->execute([$tournamentId, $playerId, $cid, $code]);
+        }
+    }
+}
+
+function bm_clear_tournament_player_entries(PDO $pdo, int $tournamentId, int $playerId): void
+{
+    $pdo->prepare('DELETE FROM tournament_entries WHERE tournament_id=? AND player_id=?')
+        ->execute([$tournamentId, $playerId]);
+}
+
+/** @deprecated Global player events — kept for old data only. Use tournament_entries. */
 function bm_player_event_codes(PDO $pdo, int $playerId): array
 {
     $st = $pdo->prepare('SELECT event_code FROM player_events WHERE player_id = ? ORDER BY event_code');

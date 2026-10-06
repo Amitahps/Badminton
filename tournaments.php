@@ -24,7 +24,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow">Events</p>
     <h1>Tournaments</h1>
-    <p class="lede">Create tournament name, held at, and dates. Then form teams by age category and event. Teams can be changed per tournament.</p>
+    <p class="lede">Create tournament name, held at, and dates. Then assign players to age categories and events for that tournament, and form teams.</p>
   </div>
   <div class="page-actions"><a class="btn btn-primary" href="tournament-form.php">Create tournament</a></div>
 </section>

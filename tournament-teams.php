@@ -56,11 +56,8 @@ if (isset($_POST['save_team'])) {
         }
 
         foreach ($picked as $p) {
-            if ((int)$p['age_category_id'] !== $catId) {
-                throw new RuntimeException($p['full_name'] . ' is not in this age category.');
-            }
-            if (!bm_player_has_event($pdo, (int)$p['id'], $event)) {
-                throw new RuntimeException($p['full_name'] . ' is not assigned to event ' . $def['label'] . '.');
+            if (!bm_tournament_has_entry($pdo, $tournamentId, (int)$p['id'], $catId, $event)) {
+                throw new RuntimeException($p['full_name'] . ' is not entered for ' . $category['name'] . ' / ' . $def['label'] . ' in this tournament. Assign them first.');
             }
         }
 
@@ -126,14 +123,14 @@ if (isset($_POST['save_team'])) {
     bm_redirect('tournament-teams.php?tournament_id=' . $tournamentId . '&category_id=' . $catId . '&event=' . urlencode($event));
 }
 
-// Eligible players for this category+event (player may also play other events)
+// Eligible players: entered for THIS tournament + category + event (may also play other categories/events here)
 $elig = $pdo->prepare("
     SELECT p.* FROM players p
-    JOIN player_events pe ON pe.player_id = p.id AND pe.event_code = ?
-    WHERE p.age_category_id = ?
+    JOIN tournament_entries e ON e.player_id = p.id
+      AND e.tournament_id = ? AND e.age_category_id = ? AND e.event_code = ?
     ORDER BY p.full_name
 ");
-$elig->execute([$event, $catId]);
+$elig->execute([$tournamentId, $catId, $event]);
 $players = $elig->fetchAll();
 
 // Already used in THIS event only (same player may still join other events)
@@ -184,7 +181,7 @@ require __DIR__ . '/includes/header.php';
       <?php else: ?>
         Select <strong>1 boy + 1 girl</strong> to form a mix double team.
       <?php endif; ?>
-      Same player can also play in <strong>other events</strong> in this tournament. To change a team here, remove it and form again.
+      Same player can also play in <strong>other age categories and events</strong> in this tournament (set on Assign players). To change a team here, remove it and form again.
     </p>
   </div>
   <div class="page-actions">
@@ -272,7 +269,7 @@ require __DIR__ . '/includes/header.php';
   <?php elseif ($players): ?>
   <p class="empty">All assigned players for this event are already in teams. Remove a team to change partners.</p>
   <?php else: ?>
-  <p class="empty">No players assigned to this age category + event yet. <a href="players.php">Assign players</a> first.</p>
+  <p class="empty">No players entered for this age category + event in this tournament. <a href="tournament-entries.php?tournament_id=<?= $tournamentId ?>">Assign players</a> first.</p>
   <?php endif; ?>
 </section>
 <?php require __DIR__ . '/includes/footer.php'; ?>
