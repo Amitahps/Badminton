@@ -78,6 +78,7 @@ function bm_init_schema(PDO $pdo): void
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
+            recovery_key_hash TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
 
@@ -289,6 +290,10 @@ function bm_migrate_schema(PDO $pdo): void
     if (bm_table_exists($pdo, 'tournament_teams') && !bm_column_exists($pdo, 'tournament_teams', 'include_in_letter')) {
         $pdo->exec('ALTER TABLE tournament_teams ADD COLUMN include_in_letter INTEGER NOT NULL DEFAULT 1');
     }
+
+    if (bm_table_exists($pdo, 'users') && !bm_column_exists($pdo, 'users', 'recovery_key_hash')) {
+        $pdo->exec('ALTER TABLE users ADD COLUMN recovery_key_hash TEXT');
+    }
 }
 
 /** Events assigned to a player inside one tournament. */
@@ -394,12 +399,90 @@ function bm_set_player_events(PDO $pdo, int $playerId, array $eventCodes): void
 
 function bm_seed_admin(PDO $pdo): void
 {
-    $stmt = $pdo->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id, recovery_key_hash FROM users WHERE username = ? LIMIT 1');
     $stmt->execute([BM_DEFAULT_USER]);
-    if (!$stmt->fetch()) {
-        $ins = $pdo->prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)');
-        $ins->execute([BM_DEFAULT_USER, password_hash(BM_DEFAULT_PASS, PASSWORD_DEFAULT)]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        $plainKey = bm_make_recovery_key();
+        $ins = $pdo->prepare('INSERT INTO users (username, password_hash, recovery_key_hash) VALUES (?, ?, ?)');
+        $ins->execute([
+            BM_DEFAULT_USER,
+            password_hash(BM_DEFAULT_PASS, PASSWORD_DEFAULT),
+            password_hash($plainKey, PASSWORD_DEFAULT),
+        ]);
+        bm_save_recovery_key_file($plainKey);
     }
+}
+
+/** Random recovery key like BM-XXXX-XXXX-XXXX */
+function bm_make_recovery_key(): string
+{
+    $chunk = static function (): string {
+        return strtoupper(bin2hex(random_bytes(2)));
+    };
+    return 'BM-' . $chunk() . '-' . $chunk() . '-' . $chunk() . '-' . $chunk();
+}
+
+function bm_save_recovery_key_file(string $plainKey): void
+{
+    if (!is_dir(BM_DATA_DIR)) {
+        @mkdir(BM_DATA_DIR, 0755, true);
+    }
+    $path = BM_DATA_DIR . '/RECOVERY_KEY.txt';
+    $body = "Badminton Tournament Entry — recovery key\n"
+        . "Keep this file private. Use it on recover.php if you forget the password.\n"
+        . "Generated: " . date('d-m-Y H:i') . "\n\n"
+        . $plainKey . "\n";
+    @file_put_contents($path, $body);
+}
+
+function bm_user_has_recovery_key(PDO $pdo, int $userId): bool
+{
+    $st = $pdo->prepare('SELECT recovery_key_hash FROM users WHERE id = ?');
+    $st->execute([$userId]);
+    $hash = $st->fetchColumn();
+    return is_string($hash) && $hash !== '';
+}
+
+/** Create/replace recovery key for a user; returns plaintext once. */
+function bm_set_user_recovery_key(PDO $pdo, int $userId): string
+{
+    $plain = bm_make_recovery_key();
+    $pdo->prepare('UPDATE users SET recovery_key_hash = ? WHERE id = ?')
+        ->execute([password_hash($plain, PASSWORD_DEFAULT), $userId]);
+    bm_save_recovery_key_file($plain);
+    return $plain;
+}
+
+/**
+ * Reset password using recovery key. Returns true on success.
+ * Regenerates recovery key after use (old key stops working).
+ */
+function bm_recover_password(PDO $pdo, string $username, string $recoveryKey, string $newPassword): string
+{
+    $username = trim($username);
+    $recoveryKey = strtoupper(trim($recoveryKey));
+    if ($username === '' || $recoveryKey === '') {
+        throw new RuntimeException('Username and recovery key are required.');
+    }
+    if (strlen($newPassword) < 6) {
+        throw new RuntimeException('New password must be at least 6 characters.');
+    }
+    $st = $pdo->prepare('SELECT id, recovery_key_hash FROM users WHERE username = ? LIMIT 1');
+    $st->execute([$username]);
+    $user = $st->fetch();
+    if (!$user || empty($user['recovery_key_hash'])) {
+        throw new RuntimeException('No recovery key is set for this user. Sign in (or ask admin) and generate one under Password.');
+    }
+    if (!password_verify($recoveryKey, (string)$user['recovery_key_hash'])) {
+        throw new RuntimeException('Invalid recovery key.');
+    }
+    $uid = (int)$user['id'];
+    $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+        ->execute([password_hash($newPassword, PASSWORD_DEFAULT), $uid]);
+    // Invalidate used key and issue a new one (saved to data/RECOVERY_KEY.txt)
+    $newKey = bm_set_user_recovery_key($pdo, $uid);
+    return $newKey;
 }
 
 /** Event codes used across the app (formerly play type). */

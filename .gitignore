@@ -1,4 +1,5 @@
 data/badminton.db
+data/RECOVERY_KEY.txt
 data/uploads/*
 !data/uploads/.gitkeep
 backups/*

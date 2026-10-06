@@ -50,6 +50,7 @@ require __DIR__ . '/includes/header.php';
       <button type="submit" class="btn btn-primary">Sign in</button>
     </form>
     <p class="hint">Default login: <strong>admin</strong> / <strong>admin123</strong> — change after first login.</p>
+    <p class="hint"><a href="recover.php">Forgot password? Use recovery key</a></p>
   </div>
 </section>
 <?php require __DIR__ . '/includes/footer.php'; ?>
