@@ -42,69 +42,69 @@ if ($letterSign === '') {
     $letterSign = $defaultSign;
 }
 
-// Flat letter sections: "Under 13 Boys Singles", "Under 15 Mix Double" (mix not under Boys/Girls)
-$cats = $pdo->prepare("
-    SELECT DISTINCT c.*
-    FROM age_categories c
-    JOIN tournament_teams t ON t.age_category_id = c.id
+// Build letter sections from teams that actually exist (never drop a saved team)
+$teamRows = $pdo->prepare("
+    SELECT t.*,
+           c.name AS category_name,
+           c.gender_scope AS category_scope,
+           c.age_group AS category_age_group,
+           c.sort_order AS category_sort
+    FROM tournament_teams t
+    JOIN age_categories c ON c.id = t.age_category_id
     WHERE t.tournament_id = ?
-    ORDER BY c.sort_order, c.name
+    ORDER BY c.sort_order, c.name, t.event_code, t.id
 ");
-$cats->execute([$id]);
-$categories = $cats->fetchAll();
-$sections = [];
-$mixSeen = [];
-foreach ($categories as $cat) {
-    $allowed = bm_events_for_gender_scope(bm_category_gender_scope($cat));
-    foreach ($allowed as $code => $def) {
-        $ts = $pdo->prepare("
-            SELECT * FROM tournament_teams
-            WHERE tournament_id=? AND age_category_id=? AND event_code=?
-            ORDER BY id
-        ");
-        $ts->execute([$id, (int)$cat['id'], $code]);
-        $teams = $ts->fetchAll();
-        if (!$teams) {
-            continue;
-        }
-        foreach ($teams as &$team) {
-            $ms = $pdo->prepare("
-                SELECT p.* FROM players p
-                JOIN tournament_team_members m ON m.player_id = p.id
-                WHERE m.team_id=?
-                ORDER BY CASE p.gender WHEN 'boy' THEN 0 ELSE 1 END, p.full_name
-            ");
-            $ms->execute([(int)$team['id']]);
-            $team['members'] = $ms->fetchAll();
-        }
-        unset($team);
+$teamRows->execute([$id]);
+$rawTeams = $teamRows->fetchAll();
 
-        $heading = bm_letter_heading($cat, $code);
-        if ($code === 'mix_double') {
-            $group = trim((string)($cat['age_group'] ?? ''));
-            if ($group === '') {
-                $group = bm_infer_category_meta($cat['name'])['age_group'];
-            }
-            $mixKey = $group !== '' ? 'g:' . mb_strtolower($group) : 'c:' . (int)$cat['id'];
-            if (isset($mixSeen[$mixKey])) {
-                // Merge teams into the first Mix Double section for this age group
-                $sections[$mixSeen[$mixKey]]['teams'] = array_merge($sections[$mixSeen[$mixKey]]['teams'], $teams);
-                continue;
-            }
-            $mixSeen[$mixKey] = count($sections);
-        }
+$sectionsByKey = [];
+$sectionOrder = [];
+foreach ($rawTeams as $team) {
+    $cat = [
+        'id' => (int)$team['age_category_id'],
+        'name' => $team['category_name'],
+        'gender_scope' => $team['category_scope'] ?: 'open',
+        'age_group' => $team['category_age_group'],
+    ];
+    $code = (string)$team['event_code'];
+    $heading = bm_letter_heading($cat, $code);
 
-        $sections[] = [
+    if ($code === 'mix_double') {
+        $group = trim((string)($cat['age_group'] ?? ''));
+        if ($group === '') {
+            $group = bm_infer_category_meta($cat['name'])['age_group'];
+        }
+        $key = 'mix:' . strtolower($group !== '' ? $group : ('cat-' . $cat['id']));
+    } else {
+        $key = 'cat:' . $cat['id'] . '|ev:' . $code;
+    }
+
+    $ms = $pdo->prepare("
+        SELECT p.* FROM players p
+        JOIN tournament_team_members m ON m.player_id = p.id
+        WHERE m.team_id = ?
+        ORDER BY CASE p.gender WHEN 'boy' THEN 0 ELSE 1 END, p.full_name
+    ");
+    $ms->execute([(int)$team['id']]);
+    $team['members'] = $ms->fetchAll();
+
+    if (!isset($sectionsByKey[$key])) {
+        $sectionsByKey[$key] = [
             'heading' => $heading,
             'event' => $code,
-            'label' => $def['label'],
+            'label' => bm_event_label($code),
             'category_name' => $cat['name'],
-            'teams' => $teams,
+            'teams' => [],
         ];
+        $sectionOrder[] = $key;
     }
+    $sectionsByKey[$key]['teams'][] = $team;
 }
-// Keep $grouped for any legacy reference → map to sections shape used below
-$grouped = $sections;
+
+$grouped = [];
+foreach ($sectionOrder as $key) {
+    $grouped[] = $sectionsByKey[$key];
+}
 
 $heldAt = $tournament['held_at'];
 $dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
@@ -178,7 +178,7 @@ require __DIR__ . '/includes/header.php';
   </form>
 </section>
 
-<article class="letter-sheet">
+<article class="letter-sheet" id="letter-content">
   <p class="letter-date">Date: <?= bm_h($today) ?></p>
   <p>To<br><span class="letter-to"><?= bm_h($letterTo) ?></span></p>
   <p><strong>Subject:</strong> Details of Players Participating in the Tournament Held at <?= bm_h($heldAt) ?> on <?= bm_h($dateText) ?></p>
@@ -228,4 +228,27 @@ require __DIR__ . '/includes/header.php';
   <p>Thanking You</p>
   <p class="letter-sign"><?= bm_h($letterSign) ?></p>
 </article>
+<script>
+(function(){
+  var btn = document.getElementById('copy-letter');
+  if (!btn) return;
+  btn.addEventListener('click', function(){
+    var el = document.getElementById('letter-content');
+    if (!el) return;
+    var text = el.innerText.replace(/\n{3,}/g, '\n\n').trim();
+    function ok(){
+      var old = btn.textContent;
+      btn.textContent = 'Copied — paste anywhere';
+      setTimeout(function(){ btn.textContent = old; }, 2000);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok).catch(function(){
+        window.prompt('Copy this letter text (Ctrl+C), then paste where you need:', text);
+      });
+    } else {
+      window.prompt('Copy this letter text (Ctrl+C), then paste where you need:', text);
+    }
+  });
+})();
+</script>
 <?php require __DIR__ . '/includes/footer.php'; ?>

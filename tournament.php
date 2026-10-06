@@ -59,7 +59,7 @@ foreach ($categories as $c) {
         continue;
     }
     $group = trim((string)($c['age_group'] ?? ''));
-    $mixKey = $group !== '' ? 'g:' . mb_strtolower($group) : 'c:' . (int)$c['id'];
+    $mixKey = $group !== '' ? 'g:' . strtolower($group) : 'c:' . (int)$c['id'];
     if (isset($mixShown[$mixKey])) {
         continue;
     }
