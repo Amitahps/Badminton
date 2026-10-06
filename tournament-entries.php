@@ -179,16 +179,19 @@ require __DIR__ . '/includes/header.php';
     <fieldset style="border:1px solid var(--line);border-radius:10px;padding:0.75rem 1rem;margin:0.75rem 0;">
       <legend style="font-weight:600;padding:0 0.35rem;">Age categories (select multiple)</legend>
       <?php foreach ($categories as $c): ?>
+        <?php $sc = bm_category_gender_scope($c); ?>
         <label class="check-inline" style="display:flex;margin:0.4rem 0;font-weight:500;">
-          <input type="checkbox" name="category_ids[]" value="<?= (int)$c['id'] ?>"
+          <input type="checkbox" class="cat-pick" name="category_ids[]" value="<?= (int)$c['id'] ?>"
+            data-scope="<?= bm_h($sc) ?>"
             <?= in_array((int)$c['id'], $selectedCats, true) ? 'checked' : '' ?>>
           <?= bm_h($c['name']) ?>
+          <span class="muted"> (<?= bm_h(bm_gender_scope_label($sc)) ?>)</span>
         </label>
       <?php endforeach; ?>
     </fieldset>
 
     <fieldset style="border:1px solid var(--line);border-radius:10px;padding:0.75rem 1rem;margin:0.75rem 0;">
-      <legend style="font-weight:600;padding:0 0.35rem;">Events (select multiple)</legend>
+      <legend style="font-weight:600;padding:0 0.35rem;">Events (select multiple — filtered by category)</legend>
       <?php foreach ($events as $code => $def): ?>
         <label class="check-inline event-opt" data-code="<?= bm_h($code) ?>" style="display:flex;margin:0.4rem 0;font-weight:500;">
           <input type="checkbox" name="event_codes[]" value="<?= bm_h($code) ?>"
@@ -207,28 +210,48 @@ require __DIR__ . '/includes/header.php';
 <script>
 (function(){
   var sel = document.getElementById('player_id');
-  function syncGender(){
+  var scopeEvents = {
+    boys: {single:1, double_men:1, mix_double:1},
+    girls: {single:1, double_girls:1, mix_double:1},
+    open: {single:1, double_men:1, double_girls:1, mix_double:1}
+  };
+  function syncEvents(){
     var opt = sel.options[sel.selectedIndex];
     var g = opt ? (opt.getAttribute('data-gender') || '') : '';
+    var cats = document.querySelectorAll('.cat-pick:checked');
+    var allowed = {};
+    if (!cats.length) {
+      allowed = {single:1, double_men:1, double_girls:1, mix_double:1};
+    } else {
+      cats.forEach(function(c){
+        var map = scopeEvents[c.getAttribute('data-scope')] || scopeEvents.open;
+        Object.keys(map).forEach(function(k){ allowed[k] = 1; });
+      });
+    }
     document.querySelectorAll('.event-opt').forEach(function(lab){
       var code = lab.getAttribute('data-code');
       var input = lab.querySelector('input');
-      var disabled = (code === 'double_men' && g === 'girl') || (code === 'double_girls' && g === 'boy');
+      var byCat = !allowed[code];
+      var byGender = (code === 'double_men' && g === 'girl') || (code === 'double_girls' && g === 'boy');
+      var disabled = byCat || byGender;
       input.disabled = disabled;
       if (disabled) input.checked = false;
-      lab.style.opacity = disabled ? '0.45' : '1';
+      lab.style.display = byCat ? 'none' : 'flex';
+      lab.style.opacity = byGender ? '0.45' : '1';
     });
   }
+  document.querySelectorAll('.cat-pick').forEach(function(c){
+    c.addEventListener('change', syncEvents);
+  });
   sel.addEventListener('change', function(){
-    // Jump to edit URL so existing ticks load for that player
     var id = sel.value;
     if (id) {
       location.href = 'tournament-entries.php?tournament_id=<?= (int)$tournamentId ?>&player_id=' + encodeURIComponent(id);
       return;
     }
-    syncGender();
+    syncEvents();
   });
-  syncGender();
+  syncEvents();
 })();
 </script>
 <?php endif; ?>

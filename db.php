@@ -86,6 +86,8 @@ function bm_init_schema(PDO $pdo): void
             name TEXT NOT NULL UNIQUE,
             sort_order INTEGER NOT NULL DEFAULT 0,
             notes TEXT,
+            gender_scope TEXT NOT NULL DEFAULT 'open',
+            age_group TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
 
@@ -231,6 +233,39 @@ function bm_migrate_schema(PDO $pdo): void
             $ins->execute([(int)$r['id'], $r['event_code']]);
         }
     }
+
+    if (bm_table_exists($pdo, 'age_categories')) {
+        if (!bm_column_exists($pdo, 'age_categories', 'gender_scope')) {
+            $pdo->exec("ALTER TABLE age_categories ADD COLUMN gender_scope TEXT NOT NULL DEFAULT 'open'");
+        }
+        if (!bm_column_exists($pdo, 'age_categories', 'age_group')) {
+            $pdo->exec('ALTER TABLE age_categories ADD COLUMN age_group TEXT');
+        }
+        // Infer boys/girls from existing names when still open
+        $cats = $pdo->query("SELECT id, name, gender_scope, age_group FROM age_categories")->fetchAll();
+        $upd = $pdo->prepare('UPDATE age_categories SET gender_scope=?, age_group=? WHERE id=?');
+        foreach ($cats as $c) {
+            $scope = $c['gender_scope'] ?: 'open';
+            $group = $c['age_group'];
+            $inferred = bm_infer_category_meta($c['name']);
+            if ($scope === 'open' && $inferred['gender_scope'] !== 'open') {
+                $scope = $inferred['gender_scope'];
+            }
+            if (($group === null || $group === '') && $inferred['age_group'] !== '') {
+                $group = $inferred['age_group'];
+            }
+            $upd->execute([$scope, $group !== '' ? $group : null, (int)$c['id']]);
+        }
+    }
+
+    if (bm_table_exists($pdo, 'tournaments')) {
+        if (!bm_column_exists($pdo, 'tournaments', 'letter_to')) {
+            $pdo->exec("ALTER TABLE tournaments ADD COLUMN letter_to TEXT");
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'letter_sign')) {
+            $pdo->exec("ALTER TABLE tournaments ADD COLUMN letter_sign TEXT");
+        }
+    }
 }
 
 /** Events assigned to a player inside one tournament. */
@@ -258,7 +293,7 @@ function bm_tournament_has_entry(PDO $pdo, int $tournamentId, int $playerId, int
 
 /**
  * Replace a player's category×event entries for one tournament.
- * Same player may join multiple age categories and multiple events in this tournament only.
+ * Only valid events for each category gender_scope are stored.
  */
 function bm_set_tournament_player_entries(PDO $pdo, int $tournamentId, int $playerId, array $categoryIds, array $eventCodes): void
 {
@@ -280,9 +315,22 @@ function bm_set_tournament_player_entries(PDO $pdo, int $tournamentId, int $play
             $evs[$code] = true;
         }
     }
+    if (!$cats || !$evs) {
+        return;
+    }
+    $in = implode(',', array_fill(0, count($cats), '?'));
+    $st = $pdo->prepare("SELECT id, gender_scope FROM age_categories WHERE id IN ($in)");
+    $st->execute(array_keys($cats));
+    $scopeById = [];
+    foreach ($st->fetchAll() as $row) {
+        $scopeById[(int)$row['id']] = $row['gender_scope'] ?: 'open';
+    }
     foreach (array_keys($cats) as $cid) {
+        $allowed = bm_events_for_gender_scope($scopeById[$cid] ?? 'open');
         foreach (array_keys($evs) as $code) {
-            $ins->execute([$tournamentId, $playerId, $cid, $code]);
+            if (isset($allowed[$code])) {
+                $ins->execute([$tournamentId, $playerId, $cid, $code]);
+            }
         }
     }
 }
@@ -338,7 +386,7 @@ function bm_event_defs(): array
         'single' => [
             'label' => 'Single',
             'team_size' => 1,
-            'genders' => ['boy', 'girl'], // any one player
+            'genders' => ['boy', 'girl'],
             'rule' => 'one',
         ],
         'double_men' => [
@@ -360,6 +408,66 @@ function bm_event_defs(): array
             'rule' => 'mix',
         ],
     ];
+}
+
+/** Guess boys/girls + age group from a category name like "Under 14 Boys". */
+function bm_infer_category_meta(string $name): array
+{
+    $n = strtolower($name);
+    $scope = 'open';
+    if (preg_match('/\b(boys?|men|male)\b/', $n)) {
+        $scope = 'boys';
+    } elseif (preg_match('/\b(girls?|women|female|ladies)\b/', $n)) {
+        $scope = 'girls';
+    }
+    $group = trim(preg_replace('/\b(boys?|girls?|men|women|male|female|ladies)\b/i', '', $name) ?? '');
+    $group = trim(preg_replace('/\s{2,}/', ' ', $group) ?? '');
+    $group = trim($group, " -\t");
+    return ['gender_scope' => $scope, 'age_group' => $group];
+}
+
+/** Events allowed for a category gender_scope. */
+function bm_events_for_gender_scope(string $scope): array
+{
+    $all = bm_event_defs();
+    if ($scope === 'boys') {
+        return array_intersect_key($all, array_flip(['single', 'double_men', 'mix_double']));
+    }
+    if ($scope === 'girls') {
+        return array_intersect_key($all, array_flip(['single', 'double_girls', 'mix_double']));
+    }
+    return $all;
+}
+
+function bm_category_gender_scope(array $category): string
+{
+    $s = $category['gender_scope'] ?? 'open';
+    return in_array($s, ['boys', 'girls', 'open'], true) ? $s : 'open';
+}
+
+function bm_gender_scope_label(string $scope): string
+{
+    if ($scope === 'boys') {
+        return 'Boys';
+    }
+    if ($scope === 'girls') {
+        return 'Girls';
+    }
+    return 'Open (all)';
+}
+
+/** Category IDs that share the same age_group (for Mix Double boy+girl pool). */
+function bm_paired_category_ids(PDO $pdo, array $category): array
+{
+    $id = (int)$category['id'];
+    $group = trim((string)($category['age_group'] ?? ''));
+    if ($group === '') {
+        return [$id];
+    }
+    $st = $pdo->prepare('SELECT id FROM age_categories WHERE age_group = ?');
+    $st->execute([$group]);
+    $ids = array_map('intval', array_column($st->fetchAll(), 'id'));
+    return $ids ?: [$id];
 }
 
 function bm_event_label(?string $code): string

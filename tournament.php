@@ -14,13 +14,11 @@ if (!$tournament) {
 }
 
 $categories = $pdo->query('SELECT * FROM age_categories ORDER BY sort_order, name')->fetchAll();
-$events = bm_event_defs();
 
 $ecStmt = $pdo->prepare('SELECT COUNT(DISTINCT player_id) FROM tournament_entries WHERE tournament_id = ?');
 $ecStmt->execute([$id]);
 $entryPlayerCount = (int)$ecStmt->fetchColumn();
 
-// Team counts per category+event
 $countStmt = $pdo->prepare("
     SELECT age_category_id, event_code, COUNT(*) AS team_count
     FROM tournament_teams
@@ -41,7 +39,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow">Tournament</p>
     <h1><?= bm_h($tournament['name']) ?></h1>
-    <p class="lede">Held at <strong><?= bm_h($tournament['held_at']) ?></strong> on <strong><?= bm_h($dateText) ?></strong>. First assign which players play which age categories and events <em>in this tournament</em>, then form teams.</p>
+    <p class="lede">Held at <strong><?= bm_h($tournament['held_at']) ?></strong> on <strong><?= bm_h($dateText) ?></strong>. Boys categories show boys events only; girls categories show girls events. Mix Double lists both when age groups match.</p>
   </div>
   <div class="page-actions">
     <a class="btn btn-primary" href="tournament-entries.php?tournament_id=<?= $id ?>">Assign players / categories / events</a>
@@ -65,6 +63,7 @@ require __DIR__ . '/includes/header.php';
     <thead>
       <tr>
         <th>Age category</th>
+        <th>For</th>
         <th>Event</th>
         <th>Teams saved</th>
         <th></th>
@@ -72,10 +71,15 @@ require __DIR__ . '/includes/header.php';
     </thead>
     <tbody>
     <?php foreach ($categories as $c): ?>
+      <?php
+        $scope = bm_category_gender_scope($c);
+        $events = bm_events_for_gender_scope($scope);
+      ?>
       <?php foreach ($events as $code => $def): ?>
         <?php $key = (int)$c['id'] . '|' . $code; ?>
         <tr>
           <td><strong><?= bm_h($c['name']) ?></strong></td>
+          <td><?= bm_h(bm_gender_scope_label($scope)) ?></td>
           <td><?= bm_h($def['label']) ?></td>
           <td><?= (int)($teamCounts[$key] ?? 0) ?></td>
           <td class="right">

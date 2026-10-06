@@ -4,7 +4,7 @@ require_once __DIR__ . '/helpers.php';
 bm_require_login();
 $pdo = bm_db();
 
-$id = (int)($_GET['id'] ?? 0);
+$id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
 $fmt = strtolower(trim((string)($_GET['format'] ?? 'letter')));
 
 $stmt = $pdo->prepare('SELECT * FROM tournaments WHERE id = ?');
@@ -13,6 +13,33 @@ $tournament = $stmt->fetch();
 if (!$tournament) {
     bm_flash('error', 'Tournament not found.');
     bm_redirect('tournaments.php');
+}
+
+$defaultTo = "The Secretary\nPunjab Badminton Association";
+$defaultSign = "Member\nDistrict Badminton Association\nHoshiarpur";
+
+if (isset($_POST['save_letter'])) {
+    $to = trim((string)($_POST['letter_to'] ?? ''));
+    $sign = trim((string)($_POST['letter_sign'] ?? ''));
+    if ($to === '') {
+        $to = $defaultTo;
+    }
+    if ($sign === '') {
+        $sign = $defaultSign;
+    }
+    $pdo->prepare("UPDATE tournaments SET letter_to=?, letter_sign=?, updated_at=datetime('now','localtime') WHERE id=?")
+        ->execute([$to, $sign, $id]);
+    bm_flash('success', 'Letter address saved. You can print or send this to anyone.');
+    bm_redirect('letter.php?id=' . $id);
+}
+
+$letterTo = trim((string)($tournament['letter_to'] ?? ''));
+if ($letterTo === '') {
+    $letterTo = $defaultTo;
+}
+$letterSign = trim((string)($tournament['letter_sign'] ?? ''));
+if ($letterSign === '') {
+    $letterSign = $defaultSign;
 }
 
 // Group teams by category then event
@@ -28,7 +55,8 @@ $categories = $cats->fetchAll();
 $grouped = [];
 foreach ($categories as $cat) {
     $eventsBlock = [];
-    foreach (bm_event_defs() as $code => $def) {
+    $allowed = bm_events_for_gender_scope(bm_category_gender_scope($cat));
+    foreach ($allowed as $code => $def) {
         $ts = $pdo->prepare("
             SELECT * FROM tournament_teams
             WHERE tournament_id=? AND age_category_id=? AND event_code=?
@@ -100,12 +128,14 @@ require __DIR__ . '/includes/header.php';
   .wrap { max-width: none; padding: 0; margin: 0; width: auto; }
   .letter-sheet { box-shadow: none; border: none; margin: 0; padding: 12mm 14mm; }
 }
+.letter-to { white-space: pre-line; }
+.letter-sign { white-space: pre-line; }
 </style>
 <section class="page-head no-print">
   <div>
     <p class="eyebrow">Export</p>
     <h1>Participating players list</h1>
-    <p class="lede">Category-wise teams for <?= bm_h($tournament['name']) ?>.</p>
+    <p class="lede">Edit the “To” address below so this letter can go to Punjab Badminton Association or anyone else.</p>
   </div>
   <div class="page-actions">
     <button type="button" class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
@@ -114,9 +144,24 @@ require __DIR__ . '/includes/header.php';
   </div>
 </section>
 
+<section class="panel narrow no-print">
+  <form method="post" class="form">
+    <input type="hidden" name="id" value="<?= $id ?>">
+    <label>To (editable — send to anyone)
+      <textarea name="letter_to" rows="4" required><?= bm_h($letterTo) ?></textarea>
+    </label>
+    <label>Sign-off (editable)
+      <textarea name="letter_sign" rows="4" required><?= bm_h($letterSign) ?></textarea>
+    </label>
+    <div class="form-actions">
+      <button type="submit" name="save_letter" value="1" class="btn btn-primary">Save letter address</button>
+    </div>
+  </form>
+</section>
+
 <article class="letter-sheet">
   <p class="letter-date">Date: <?= bm_h($today) ?></p>
-  <p>To<br>The Secretary<br>Punjab Badminton Association</p>
+  <p>To<br><span class="letter-to"><?= bm_h($letterTo) ?></span></p>
   <p><strong>Subject:</strong> Details of Players Participating in the Tournament Held at <?= bm_h($heldAt) ?> on <?= bm_h($dateText) ?></p>
   <p>Sir/Madam,</p>
   <p>With due respect, please find below the details of the players participating in the badminton tournament being held at <?= bm_h($heldAt) ?> on <?= bm_h($dateText) ?>. The list of players is provided category-wise and event-wise for your kind information and record.</p>
@@ -161,10 +206,10 @@ require __DIR__ . '/includes/header.php';
       </section>
     <?php endforeach; ?>
   <?php else: ?>
-    <p><em>No teams formed yet. Open tournament → category + event → form teams.</em></p>
+    <p><em>No teams formed yet. Open tournament → assign players → form teams.</em></p>
   <?php endif; ?>
 
   <p>Thanking You</p>
-  <p class="letter-sign">Member<br>District Badminton Association<br>Hoshiarpur</p>
+  <p class="letter-sign"><?= bm_h($letterSign) ?></p>
 </article>
 <?php require __DIR__ . '/includes/footer.php'; ?>
