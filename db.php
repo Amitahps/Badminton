@@ -117,6 +117,8 @@ function bm_init_schema(PDO $pdo): void
             date_from TEXT NOT NULL,
             date_to TEXT NOT NULL,
             notes TEXT,
+            letter_to TEXT,
+            letter_sign TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
