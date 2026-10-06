@@ -48,11 +48,18 @@ $teamRows = $pdo->prepare("
            c.name AS category_name,
            c.gender_scope AS category_scope,
            c.age_group AS category_age_group,
-           c.sort_order AS category_sort
+           c.sort_order AS category_sort,
+           CASE t.event_code
+             WHEN 'single' THEN 1
+             WHEN 'double_men' THEN 2
+             WHEN 'double_girls' THEN 3
+             WHEN 'mix_double' THEN 4
+             ELSE 9
+           END AS event_sort
     FROM tournament_teams t
     JOIN age_categories c ON c.id = t.age_category_id
     WHERE t.tournament_id = ?
-    ORDER BY c.sort_order, c.name, t.event_code, t.id
+    ORDER BY c.sort_order, c.name, event_sort, t.id
 ");
 $teamRows->execute([$id]);
 $rawTeams = $teamRows->fetchAll();
