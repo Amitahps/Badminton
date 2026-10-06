@@ -119,6 +119,9 @@ function bm_init_schema(PDO $pdo): void
             notes TEXT,
             letter_to TEXT,
             letter_sign TEXT,
+            letter_date TEXT,
+            letter_subject TEXT,
+            letter_body TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
@@ -129,6 +132,7 @@ function bm_init_schema(PDO $pdo): void
             age_category_id INTEGER NOT NULL,
             event_code TEXT NOT NULL,
             team_label TEXT,
+            include_in_letter INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
@@ -271,6 +275,19 @@ function bm_migrate_schema(PDO $pdo): void
         if (!bm_column_exists($pdo, 'tournaments', 'letter_sign')) {
             $pdo->exec("ALTER TABLE tournaments ADD COLUMN letter_sign TEXT");
         }
+        if (!bm_column_exists($pdo, 'tournaments', 'letter_date')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN letter_date TEXT');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'letter_subject')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN letter_subject TEXT');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'letter_body')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN letter_body TEXT');
+        }
+    }
+
+    if (bm_table_exists($pdo, 'tournament_teams') && !bm_column_exists($pdo, 'tournament_teams', 'include_in_letter')) {
+        $pdo->exec('ALTER TABLE tournament_teams ADD COLUMN include_in_letter INTEGER NOT NULL DEFAULT 1');
     }
 }
 
@@ -484,8 +501,8 @@ function bm_event_label(?string $code): string
 }
 
 /**
- * Letter / export heading, e.g. "Under 13 Boys Singles", "Under 15 Mix Double".
- * Mix Double uses age group only (not Boys/Girls).
+ * Letter / export heading.
+ * Examples: Under 15 Boys Singles, Under 15 Girls Doubles, Under 15 Mix Doubles.
  */
 function bm_letter_heading(array $category, string $eventCode): string
 {
@@ -494,23 +511,33 @@ function bm_letter_heading(array $category, string $eventCode): string
     if ($group === '') {
         $group = bm_infer_category_meta($name)['age_group'];
     }
+    $scope = bm_category_gender_scope($category);
 
     if ($eventCode === 'mix_double') {
         $base = $group !== '' ? $group : trim(preg_replace('/\b(boys?|girls?|men|women)\b/iu', '', $name) ?? '');
         $base = trim(preg_replace('/\s{2,}/', ' ', $base) ?? '');
-        return trim($base . ' Mix Double');
+        return trim($base . ' Mix Doubles');
     }
 
-    $suffix = 'Event';
+    // Prefer "Under 15 Boys Singles" style from age group + gender
+    if ($group !== '' && ($scope === 'boys' || $scope === 'girls')) {
+        $genderWord = $scope === 'boys' ? 'Boys' : 'Girls';
+        if ($eventCode === 'single') {
+            return $group . ' ' . $genderWord . ' Singles';
+        }
+        if ($eventCode === 'double_men' || $eventCode === 'double_girls') {
+            return $group . ' ' . $genderWord . ' Doubles';
+        }
+    }
+
+    // Fallback: category name + Singles/Doubles
     if ($eventCode === 'single') {
-        $suffix = 'Singles';
-    } elseif ($eventCode === 'double_men' || $eventCode === 'double_girls') {
-        $suffix = 'Double';
-    } else {
-        $suffix = bm_event_label($eventCode);
+        return trim($name . ' Singles');
     }
-
-    return trim($name . ' ' . $suffix);
+    if ($eventCode === 'double_men' || $eventCode === 'double_girls') {
+        return trim($name . ' Doubles');
+    }
+    return trim($name . ' ' . bm_event_label($eventCode));
 }
 
 function bm_gender_label(?string $g): string

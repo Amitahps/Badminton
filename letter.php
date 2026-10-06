@@ -15,21 +15,38 @@ if (!$tournament) {
     bm_redirect('tournaments.php');
 }
 
+$heldAt = $tournament['held_at'];
+$dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
 $defaultTo = "The Secretary\nPunjab Badminton Association";
 $defaultSign = "Member\nDistrict Badminton Association\nHoshiarpur";
+$defaultSubject = 'Details of Players Participating in the Tournament Held at ' . $heldAt . ' on ' . $dateText;
+$defaultBody = 'With due respect, please find below the details of the players participating in the badminton tournament being held at ' . $heldAt . ' on ' . $dateText . '. The list of players is provided category-wise and event-wise for your kind information and record.';
+$defaultDate = date('d-m-Y');
 
 if (isset($_POST['save_letter'])) {
     $to = trim((string)($_POST['letter_to'] ?? ''));
     $sign = trim((string)($_POST['letter_sign'] ?? ''));
+    $letterDate = trim((string)($_POST['letter_date'] ?? ''));
+    $subject = trim((string)($_POST['letter_subject'] ?? ''));
+    $body = trim((string)($_POST['letter_body'] ?? ''));
     if ($to === '') {
         $to = $defaultTo;
     }
     if ($sign === '') {
         $sign = $defaultSign;
     }
-    $pdo->prepare("UPDATE tournaments SET letter_to=?, letter_sign=?, updated_at=datetime('now','localtime') WHERE id=?")
-        ->execute([$to, $sign, $id]);
-    bm_flash('success', 'Letter address saved. You can print or send this to anyone.');
+    if ($letterDate === '') {
+        $letterDate = $defaultDate;
+    }
+    if ($subject === '') {
+        $subject = $defaultSubject;
+    }
+    if ($body === '') {
+        $body = $defaultBody;
+    }
+    $pdo->prepare("UPDATE tournaments SET letter_to=?, letter_sign=?, letter_date=?, letter_subject=?, letter_body=?, updated_at=datetime('now','localtime') WHERE id=?")
+        ->execute([$to, $sign, $letterDate, $subject, $body, $id]);
+    bm_flash('success', 'Letter text saved. You can edit again anytime before print / copy.');
     bm_redirect('letter.php?id=' . $id);
 }
 
@@ -41,14 +58,25 @@ $letterSign = trim((string)($tournament['letter_sign'] ?? ''));
 if ($letterSign === '') {
     $letterSign = $defaultSign;
 }
+$letterDate = trim((string)($tournament['letter_date'] ?? ''));
+if ($letterDate === '') {
+    $letterDate = $defaultDate;
+}
+$letterSubject = trim((string)($tournament['letter_subject'] ?? ''));
+if ($letterSubject === '') {
+    $letterSubject = $defaultSubject;
+}
+$letterBody = trim((string)($tournament['letter_body'] ?? ''));
+if ($letterBody === '') {
+    $letterBody = $defaultBody;
+}
 
-// Build letter sections from teams that actually exist (never drop a saved team)
+// Only teams ticked for letter
 $teamRows = $pdo->prepare("
     SELECT t.*,
            c.name AS category_name,
            c.gender_scope AS category_scope,
            c.age_group AS category_age_group,
-           c.sort_order AS category_sort,
            CASE t.event_code
              WHEN 'single' THEN 1
              WHEN 'double_men' THEN 2
@@ -59,6 +87,7 @@ $teamRows = $pdo->prepare("
     FROM tournament_teams t
     JOIN age_categories c ON c.id = t.age_category_id
     WHERE t.tournament_id = ?
+      AND IFNULL(t.include_in_letter, 1) = 1
     ORDER BY c.sort_order, c.name, event_sort, t.id
 ");
 $teamRows->execute([$id]);
@@ -113,11 +142,15 @@ foreach ($sectionOrder as $key) {
     $grouped[] = $sectionsByKey[$key];
 }
 
-$heldAt = $tournament['held_at'];
-$dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
-$today = date('d-m-Y');
+$tc = $pdo->prepare('SELECT COUNT(*) FROM tournament_teams WHERE tournament_id=?');
+$tc->execute([$id]);
+$totalTeams = (int)$tc->fetchColumn();
+$selCount = 0;
+foreach ($grouped as $b) {
+    $selCount += count($b['teams']);
+}
 
-// CSV export
+// CSV export (selected only)
 if ($fmt === 'csv') {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="participants_' . preg_replace('/[^A-Za-z0-9_-]+/', '_', $tournament['name']) . '.csv"');
@@ -155,15 +188,17 @@ require __DIR__ . '/includes/header.php';
 }
 .letter-to { white-space: pre-line; }
 .letter-sign { white-space: pre-line; }
+.letter-body { white-space: pre-line; }
 </style>
 <section class="page-head no-print">
   <div>
     <p class="eyebrow">Export</p>
     <h1>Participating players list</h1>
-    <p class="lede">Edit the “To” address below so this letter can go to Punjab Badminton Association or anyone else.</p>
+    <p class="lede">Showing <strong><?= $selCount ?></strong> of <?= $totalTeams ?> team(s). Edit letter text below, or change which teams are included.</p>
   </div>
   <div class="page-actions">
-    <button type="button" class="btn btn-primary" id="copy-letter">Copy letter</button>
+    <a class="btn btn-primary" href="letter-select.php?tournament_id=<?= $id ?>">Select teams</a>
+    <button type="button" class="btn" id="copy-letter">Copy letter</button>
     <button type="button" class="btn" onclick="window.print()">Print / Save as PDF</button>
     <a class="btn" href="letter.php?id=<?= $id ?>&format=csv">Download CSV</a>
     <a class="btn" href="tournament.php?id=<?= $id ?>">Back</a>
@@ -171,26 +206,36 @@ require __DIR__ . '/includes/header.php';
 </section>
 
 <section class="panel narrow no-print">
+  <div class="panel-head"><h2>Edit letter</h2></div>
   <form method="post" class="form">
     <input type="hidden" name="id" value="<?= $id ?>">
+    <label>Date
+      <input type="text" name="letter_date" value="<?= bm_h($letterDate) ?>" maxlength="40">
+    </label>
     <label>To (editable — send to anyone)
       <textarea name="letter_to" rows="4" required><?= bm_h($letterTo) ?></textarea>
+    </label>
+    <label>Subject
+      <textarea name="letter_subject" rows="2" required><?= bm_h($letterSubject) ?></textarea>
+    </label>
+    <label>Opening paragraph
+      <textarea name="letter_body" rows="4" required><?= bm_h($letterBody) ?></textarea>
     </label>
     <label>Sign-off (editable)
       <textarea name="letter_sign" rows="4" required><?= bm_h($letterSign) ?></textarea>
     </label>
     <div class="form-actions">
-      <button type="submit" name="save_letter" value="1" class="btn btn-primary">Save letter address</button>
+      <button type="submit" name="save_letter" value="1" class="btn btn-primary">Save letter edits</button>
     </div>
   </form>
 </section>
 
 <article class="letter-sheet" id="letter-content">
-  <p class="letter-date">Date: <?= bm_h($today) ?></p>
+  <p class="letter-date">Date: <?= bm_h($letterDate) ?></p>
   <p>To<br><span class="letter-to"><?= bm_h($letterTo) ?></span></p>
-  <p><strong>Subject:</strong> Details of Players Participating in the Tournament Held at <?= bm_h($heldAt) ?> on <?= bm_h($dateText) ?></p>
+  <p><strong>Subject:</strong> <?= bm_h($letterSubject) ?></p>
   <p>Sir/Madam,</p>
-  <p>With due respect, please find below the details of the players participating in the badminton tournament being held at <?= bm_h($heldAt) ?> on <?= bm_h($dateText) ?>. The list of players is provided category-wise and event-wise for your kind information and record.</p>
+  <p class="letter-body"><?= bm_h($letterBody) ?></p>
 
   <?php if ($grouped): ?>
     <?php foreach ($grouped as $block): ?>
@@ -229,7 +274,7 @@ require __DIR__ . '/includes/header.php';
       </section>
     <?php endforeach; ?>
   <?php else: ?>
-    <p><em>No teams formed yet. Open tournament → assign players → form teams.</em></p>
+    <p><em>No teams selected for this letter. Use “Select teams” to tick teams for export.</em></p>
   <?php endif; ?>
 
   <p>Thanking You</p>

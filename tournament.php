@@ -100,7 +100,7 @@ require __DIR__ . '/includes/header.php';
   </div>
   <div class="page-actions">
     <a class="btn btn-primary" href="tournament-entries.php?tournament_id=<?= $id ?>">Assign players / categories / events</a>
-    <a class="btn" href="letter.php?id=<?= $id ?>">Export list</a>
+    <a class="btn" href="letter-select.php?tournament_id=<?= $id ?>">Select teams &amp; export letter</a>
     <a class="btn" href="tournament-form.php?id=<?= $id ?>">Edit details</a>
   </div>
 </section>
