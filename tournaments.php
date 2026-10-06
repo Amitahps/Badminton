@@ -12,7 +12,7 @@ if (isset($_POST['delete_id'])) {
 
 $rows = $pdo->query("
     SELECT t.*,
-      (SELECT COUNT(*) FROM tournament_entries e WHERE e.tournament_id = t.id AND e.selected = 1) AS entry_count
+      (SELECT COUNT(*) FROM tournament_teams e WHERE e.tournament_id = t.id) AS entry_count
     FROM tournaments t
     ORDER BY t.date_from DESC, t.id DESC
 ")->fetchAll();
@@ -24,14 +24,14 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow">Events</p>
     <h1>Tournaments</h1>
-    <p class="lede">Create tournament name, held at, and dates. Then open each age category and tick participating players.</p>
+    <p class="lede">Create tournament name, held at, and dates. Then form teams by age category and event. Teams can be changed per tournament.</p>
   </div>
   <div class="page-actions"><a class="btn btn-primary" href="tournament-form.php">Create tournament</a></div>
 </section>
 <section class="panel">
   <?php if ($rows): ?>
   <table class="table">
-    <thead><tr><th>Name</th><th>Held at</th><th>From</th><th>To</th><th>Selected</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Held at</th><th>From</th><th>To</th><th>Teams</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($rows as $r): ?>
       <tr>

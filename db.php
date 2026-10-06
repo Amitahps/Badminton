@@ -41,13 +41,34 @@ function bm_db(): PDO
             $check = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")->fetch();
             if (!$check) {
                 bm_init_schema($pdo);
+            } else {
+                bm_migrate_schema($pdo);
             }
         }
+        bm_seed_admin($pdo);
     } catch (Throwable $e) {
         throw new RuntimeException('Database error: ' . $e->getMessage());
     }
 
     return $pdo;
+}
+
+function bm_column_exists(PDO $pdo, string $table, string $column): bool
+{
+    $cols = $pdo->query('PRAGMA table_info(' . $table . ')')->fetchAll();
+    foreach ($cols as $c) {
+        if (($c['name'] ?? '') === $column) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function bm_table_exists(PDO $pdo, string $table): bool
+{
+    $st = $pdo->prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?");
+    $st->execute([$table]);
+    return (bool)$st->fetch();
 }
 
 function bm_init_schema(PDO $pdo): void
@@ -71,9 +92,9 @@ function bm_init_schema(PDO $pdo): void
         CREATE TABLE IF NOT EXISTS players (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             full_name TEXT NOT NULL,
-            play_type TEXT NOT NULL CHECK (play_type IN ('single','double')),
-            partner_name TEXT,
-            age_category_id INTEGER NOT NULL,
+            gender TEXT NOT NULL CHECK (gender IN ('boy','girl')),
+            age_category_id INTEGER NULL,
+            event_code TEXT NULL,
             bai_id TEXT,
             pbi_id TEXT,
             aadhaar_no TEXT,
@@ -98,24 +119,128 @@ function bm_init_schema(PDO $pdo): void
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
 
-        CREATE TABLE IF NOT EXISTS tournament_entries (
+        CREATE TABLE IF NOT EXISTS tournament_teams (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tournament_id INTEGER NOT NULL,
-            player_id INTEGER NOT NULL,
             age_category_id INTEGER NOT NULL,
-            selected INTEGER NOT NULL DEFAULT 1,
+            event_code TEXT NOT NULL,
+            team_label TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-            UNIQUE(tournament_id, player_id),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
-            FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
             FOREIGN KEY (age_category_id) REFERENCES age_categories(id) ON DELETE RESTRICT
+        );
+
+        CREATE TABLE IF NOT EXISTS tournament_team_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            team_id INTEGER NOT NULL,
+            player_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE(team_id, player_id),
+            FOREIGN KEY (team_id) REFERENCES tournament_teams(id) ON DELETE CASCADE,
+            FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+        );
+    ");
+}
+
+function bm_migrate_schema(PDO $pdo): void
+{
+    // Newer tables
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS tournament_teams (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tournament_id INTEGER NOT NULL,
+            age_category_id INTEGER NOT NULL,
+            event_code TEXT NOT NULL,
+            team_label TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
+            FOREIGN KEY (age_category_id) REFERENCES age_categories(id) ON DELETE RESTRICT
+        );
+        CREATE TABLE IF NOT EXISTS tournament_team_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            team_id INTEGER NOT NULL,
+            player_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE(team_id, player_id),
+            FOREIGN KEY (team_id) REFERENCES tournament_teams(id) ON DELETE CASCADE,
+            FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
         );
     ");
 
+    if (bm_table_exists($pdo, 'players')) {
+        if (!bm_column_exists($pdo, 'players', 'gender')) {
+            $pdo->exec("ALTER TABLE players ADD COLUMN gender TEXT DEFAULT 'boy'");
+            $pdo->exec("UPDATE players SET gender='boy' WHERE gender IS NULL OR gender=''");
+        }
+        if (!bm_column_exists($pdo, 'players', 'event_code')) {
+            $pdo->exec('ALTER TABLE players ADD COLUMN event_code TEXT NULL');
+            // Map old play_type if present
+            if (bm_column_exists($pdo, 'players', 'play_type')) {
+                $pdo->exec("UPDATE players SET event_code='single' WHERE play_type='single' AND (event_code IS NULL OR event_code='')");
+                $pdo->exec("UPDATE players SET event_code='double_men' WHERE play_type='double' AND (event_code IS NULL OR event_code='')");
+            }
+        }
+        // Make age_category optional for new flow: if old NOT NULL constraint exists we can't easily drop it in SQLite;
+        // new installs already allow NULL. For old DBs keep existing values.
+    }
+}
+
+function bm_seed_admin(PDO $pdo): void
+{
     $stmt = $pdo->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
     $stmt->execute([BM_DEFAULT_USER]);
     if (!$stmt->fetch()) {
         $ins = $pdo->prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)');
         $ins->execute([BM_DEFAULT_USER, password_hash(BM_DEFAULT_PASS, PASSWORD_DEFAULT)]);
     }
+}
+
+/** Event codes used across the app (formerly play type). */
+function bm_event_defs(): array
+{
+    return [
+        'single' => [
+            'label' => 'Single',
+            'team_size' => 1,
+            'genders' => ['boy', 'girl'], // any one player
+            'rule' => 'one',
+        ],
+        'double_men' => [
+            'label' => 'Double Men',
+            'team_size' => 2,
+            'genders' => ['boy'],
+            'rule' => 'same',
+        ],
+        'double_girls' => [
+            'label' => 'Double Girls',
+            'team_size' => 2,
+            'genders' => ['girl'],
+            'rule' => 'same',
+        ],
+        'mix_double' => [
+            'label' => 'Mix Double',
+            'team_size' => 2,
+            'genders' => ['boy', 'girl'],
+            'rule' => 'mix',
+        ],
+    ];
+}
+
+function bm_event_label(?string $code): string
+{
+    $defs = bm_event_defs();
+    return $defs[$code]['label'] ?? (string)$code;
+}
+
+function bm_gender_label(?string $g): string
+{
+    if ($g === 'boy') {
+        return 'Boy';
+    }
+    if ($g === 'girl') {
+        return 'Girl';
+    }
+    return '—';
 }

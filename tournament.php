@@ -13,18 +13,23 @@ if (!$tournament) {
     bm_redirect('tournaments.php');
 }
 
-$cstmt = $pdo->prepare("
-    SELECT c.*,
-      (SELECT COUNT(*) FROM players p WHERE p.age_category_id = c.id) AS player_count,
-      (SELECT COUNT(*) FROM tournament_entries e
-        WHERE e.tournament_id = ? AND e.age_category_id = c.id AND e.selected = 1) AS selected_count
-    FROM age_categories c
-    ORDER BY c.sort_order, c.name
-");
-$cstmt->execute([$id]);
-$categories = $cstmt->fetchAll();
-$dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
+$categories = $pdo->query('SELECT * FROM age_categories ORDER BY sort_order, name')->fetchAll();
+$events = bm_event_defs();
 
+// Team counts per category+event
+$countStmt = $pdo->prepare("
+    SELECT age_category_id, event_code, COUNT(*) AS team_count
+    FROM tournament_teams
+    WHERE tournament_id = ?
+    GROUP BY age_category_id, event_code
+");
+$countStmt->execute([$id]);
+$teamCounts = [];
+foreach ($countStmt->fetchAll() as $r) {
+    $teamCounts[(int)$r['age_category_id'] . '|' . $r['event_code']] = (int)$r['team_count'];
+}
+
+$dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
 $pageTitle = $tournament['name'] . ' · Badminton';
 require __DIR__ . '/includes/header.php';
 ?>
@@ -32,31 +37,44 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow">Tournament</p>
     <h1><?= bm_h($tournament['name']) ?></h1>
-    <p class="lede">Held at <strong><?= bm_h($tournament['held_at']) ?></strong> on <strong><?= bm_h($dateText) ?></strong>. Open a category, tick players who will participate, and save. Then open the next category.</p>
+    <p class="lede">Held at <strong><?= bm_h($tournament['held_at']) ?></strong> on <strong><?= bm_h($dateText) ?></strong>. Open a category + event, form teams (Single = 1 player, Doubles = 2 players). Teams can be changed anytime.</p>
   </div>
   <div class="page-actions">
-    <a class="btn btn-primary" href="letter.php?id=<?= $id ?>">Prepare letter</a>
+    <a class="btn btn-primary" href="letter.php?id=<?= $id ?>">Export participating list</a>
     <a class="btn" href="tournament-form.php?id=<?= $id ?>">Edit details</a>
   </div>
 </section>
+
 <section class="panel">
-  <div class="panel-head"><h2>Age categories — tick participants</h2></div>
+  <div class="panel-head"><h2>Form teams by age category &amp; event</h2></div>
   <?php if ($categories): ?>
   <table class="table">
-    <thead><tr><th>Category</th><th>Players in registry</th><th>Selected for this tournament</th><th></th></tr></thead>
+    <thead>
+      <tr>
+        <th>Age category</th>
+        <th>Event</th>
+        <th>Teams saved</th>
+        <th></th>
+      </tr>
+    </thead>
     <tbody>
     <?php foreach ($categories as $c): ?>
-      <tr>
-        <td><strong><?= bm_h($c['name']) ?></strong></td>
-        <td><?= (int)$c['player_count'] ?></td>
-        <td><?= (int)$c['selected_count'] ?></td>
-        <td class="right"><a class="btn btn-sm btn-primary" href="tournament-category.php?tournament_id=<?= $id ?>&category_id=<?= (int)$c['id'] ?>">Open &amp; tick</a></td>
-      </tr>
+      <?php foreach ($events as $code => $def): ?>
+        <?php $key = (int)$c['id'] . '|' . $code; ?>
+        <tr>
+          <td><strong><?= bm_h($c['name']) ?></strong></td>
+          <td><?= bm_h($def['label']) ?></td>
+          <td><?= (int)($teamCounts[$key] ?? 0) ?></td>
+          <td class="right">
+            <a class="btn btn-sm btn-primary" href="tournament-teams.php?tournament_id=<?= $id ?>&category_id=<?= (int)$c['id'] ?>&event=<?= urlencode($code) ?>">Open &amp; form teams</a>
+          </td>
+        </tr>
+      <?php endforeach; ?>
     <?php endforeach; ?>
     </tbody>
   </table>
   <?php else: ?>
-  <p class="empty">Create age categories and players first, then return here to tick participants.</p>
+  <p class="empty">Create age categories and assign players to category + event first.</p>
   <?php endif; ?>
 </section>
 <?php require __DIR__ . '/includes/footer.php'; ?>

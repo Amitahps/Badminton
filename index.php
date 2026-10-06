@@ -6,12 +6,12 @@ $pdo = bm_db();
 
 $stats = [
     'categories' => (int)$pdo->query('SELECT COUNT(*) FROM age_categories')->fetchColumn(),
-    'players' => (int)$pdo->query('SELECT COUNT(*) FROM players')->fetchColumn(),
+    'players' => (int)$pdo->query("SELECT COUNT(*) FROM players WHERE age_category_id IS NOT NULL AND event_code IS NOT NULL AND event_code!=''")->fetchColumn(),
     'tournaments' => (int)$pdo->query('SELECT COUNT(*) FROM tournaments')->fetchColumn(),
 ];
 $recent = $pdo->query("
     SELECT t.*,
-      (SELECT COUNT(*) FROM tournament_entries e WHERE e.tournament_id = t.id AND e.selected = 1) AS entry_count
+      (SELECT COUNT(*) FROM tournament_teams e WHERE e.tournament_id = t.id) AS entry_count
     FROM tournaments t
     ORDER BY t.date_from DESC, t.id DESC
     LIMIT 5
@@ -24,7 +24,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow">Admin desk</p>
     <h1>Tournament entry</h1>
-    <p class="lede">Create age categories and players, then open a tournament and tick who will participate. The selected list prints in the Punjab Badminton Association letter format.</p>
+    <p class="lede">Create players, assign age category and event, form tournament teams (Single / Double Men / Double Girls / Mix Double), then export the participating list.</p>
   </div>
   <div class="page-actions">
     <a class="btn btn-primary" href="tournament-form.php">New tournament</a>
@@ -34,7 +34,7 @@ require __DIR__ . '/includes/header.php';
 
 <section class="stat-row">
   <div class="stat"><span><?= $stats['categories'] ?></span><small>Age categories</small></div>
-  <div class="stat"><span><?= $stats['players'] ?></span><small>Players</small></div>
+  <div class="stat"><span><?= $stats['players'] ?></span><small>Assigned players</small></div>
   <div class="stat"><span><?= $stats['tournaments'] ?></span><small>Tournaments</small></div>
 </section>
 
@@ -46,7 +46,7 @@ require __DIR__ . '/includes/header.php';
   <?php if ($recent): ?>
   <table class="table">
     <thead>
-      <tr><th>Tournament</th><th>Held at</th><th>Dates</th><th>Selected</th><th></th></tr>
+      <tr><th>Tournament</th><th>Held at</th><th>Dates</th><th>Teams</th><th></th></tr>
     </thead>
     <tbody>
       <?php foreach ($recent as $t): ?>
@@ -61,7 +61,7 @@ require __DIR__ . '/includes/header.php';
     </tbody>
   </table>
   <?php else: ?>
-  <p class="empty">No tournament yet. Create one, then tick players category by category.</p>
+  <p class="empty">No tournament yet. Create one, then form teams by category and event.</p>
   <?php endif; ?>
 </section>
 <?php require __DIR__ . '/includes/footer.php'; ?>

@@ -16,17 +16,10 @@ if ($id > 0) {
     }
 }
 
-$categories = $pdo->query('SELECT * FROM age_categories ORDER BY sort_order, name')->fetchAll();
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        if (!$categories) {
-            throw new RuntimeException('Create an age category first.');
-        }
         $fullName = trim((string)($_POST['full_name'] ?? ''));
-        $playType = strtolower(trim((string)($_POST['play_type'] ?? '')));
-        $partner = trim((string)($_POST['partner_name'] ?? ''));
-        $catId = (int)($_POST['age_category_id'] ?? 0);
+        $gender = strtolower(trim((string)($_POST['gender'] ?? '')));
         $bai = trim((string)($_POST['bai_id'] ?? ''));
         $pbi = trim((string)($_POST['pbi_id'] ?? ''));
         $aadhaar = bm_clean_aadhaar((string)($_POST['aadhaar_no'] ?? ''));
@@ -37,17 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($fullName === '') {
             throw new RuntimeException('Player name is required.');
         }
-        if (!in_array($playType, ['single', 'double'], true)) {
-            throw new RuntimeException('Select Single or Double.');
-        }
-        if ($playType === 'double' && $partner === '') {
-            throw new RuntimeException('Partner name is required for Double.');
-        }
-        if ($playType === 'single') {
-            $partner = '';
-        }
-        if ($catId <= 0) {
-            throw new RuntimeException('Age category is required.');
+        if (!in_array($gender, ['boy', 'girl'], true)) {
+            throw new RuntimeException('Select Boy or Girl.');
         }
         if ($aadhaar !== '' && strlen($aadhaar) !== 12) {
             throw new RuntimeException('Aadhaar number must be 12 digits.');
@@ -75,13 +59,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($id > 0) {
+            // Keep existing category/event on edit of basic details
             $pdo->prepare("UPDATE players SET
-                full_name=?, play_type=?, partner_name=?, age_category_id=?,
-                bai_id=?, pbi_id=?, aadhaar_no=?, aadhaar_file=?, dob=?,
+                full_name=?, gender=?, bai_id=?, pbi_id=?, aadhaar_no=?, aadhaar_file=?, dob=?,
                 dob_certificate_file=?, mobile=?, remarks=?,
                 updated_at=datetime('now','localtime')
                 WHERE id=?")->execute([
-                $fullName, $playType, $partner !== '' ? $partner : null, $catId,
+                $fullName, $gender,
                 $bai !== '' ? $bai : null, $pbi !== '' ? $pbi : null,
                 $aadhaar !== '' ? $aadhaar : null, $aadhaarFile,
                 $dob !== '' ? $dob : null, $dobFile,
@@ -89,21 +73,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $id,
             ]);
             bm_flash('success', 'Player details updated.');
+            bm_redirect('players.php');
         } else {
             $pdo->prepare("INSERT INTO players (
-                full_name, play_type, partner_name, age_category_id,
+                full_name, gender, age_category_id, event_code,
                 bai_id, pbi_id, aadhaar_no, aadhaar_file, dob, dob_certificate_file,
                 mobile, remarks
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")->execute([
-                $fullName, $playType, $partner !== '' ? $partner : null, $catId,
+            ) VALUES (?,?,NULL,NULL,?,?,?,?,?,?,?,?)")->execute([
+                $fullName, $gender,
                 $bai !== '' ? $bai : null, $pbi !== '' ? $pbi : null,
                 $aadhaar !== '' ? $aadhaar : null, $aadhaarFile,
                 $dob !== '' ? $dob : null, $dobFile,
                 $mobile !== '' ? $mobile : null, $remarks !== '' ? $remarks : null,
             ]);
-            bm_flash('success', 'Player saved.');
+            $newId = (int)$pdo->lastInsertId();
+            bm_flash('success', 'Player created. Now select Age Category and Event.');
+            bm_redirect('player-assign.php?id=' . $newId);
         }
-        bm_redirect('players.php');
     } catch (Throwable $e) {
         bm_flash('error', $e->getMessage());
     }
@@ -116,32 +102,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $pageTitle = ($id ? 'Edit' : 'Add') . ' Player · Badminton';
 require __DIR__ . '/includes/header.php';
-$playType = $row['play_type'] ?? 'single';
+$gender = $row['gender'] ?? 'boy';
 ?>
-<section class="page-head"><div><p class="eyebrow">Player</p><h1><?= $id ? 'Edit player' : 'Add player' ?></h1></div></section>
-<?php if (!$categories): ?>
-<section class="panel"><p class="empty">Create at least one age category first. <a href="category-form.php">Create category</a></p></section>
-<?php else: ?>
+<section class="page-head">
+  <div>
+    <p class="eyebrow">Player</p>
+    <h1><?= $id ? 'Edit player' : 'Create player' ?></h1>
+    <p class="lede">Enter player name and details. Age category and event are selected in the next step.</p>
+  </div>
+</section>
 <section class="panel">
   <form method="post" enctype="multipart/form-data" class="form form-grid">
     <label>Player name
       <input type="text" name="full_name" required maxlength="160" value="<?= bm_h($row['full_name'] ?? '') ?>">
     </label>
-    <label>Play type
-      <select name="play_type" id="play_type" required>
-        <option value="single" <?= $playType === 'single' ? 'selected' : '' ?>>Single</option>
-        <option value="double" <?= $playType === 'double' ? 'selected' : '' ?>>Double</option>
-      </select>
-    </label>
-    <label id="partner-wrap" class="<?= $playType === 'double' ? '' : 'is-hidden' ?>">Partner name (for Double)
-      <input type="text" name="partner_name" maxlength="160" value="<?= bm_h($row['partner_name'] ?? '') ?>">
-    </label>
-    <label>Age category
-      <select name="age_category_id" required>
-        <option value="">Select category</option>
-        <?php foreach ($categories as $c): ?>
-          <option value="<?= (int)$c['id'] ?>" <?= isset($row['age_category_id']) && (int)$row['age_category_id'] === (int)$c['id'] ? 'selected' : '' ?>><?= bm_h($c['name']) ?></option>
-        <?php endforeach; ?>
+    <label>Gender
+      <select name="gender" required>
+        <option value="boy" <?= $gender === 'boy' ? 'selected' : '' ?>>Boy</option>
+        <option value="girl" <?= $gender === 'girl' ? 'selected' : '' ?>>Girl</option>
       </select>
     </label>
     <label>BAI ID<input type="text" name="bai_id" maxlength="80" value="<?= bm_h($row['bai_id'] ?? '') ?>"></label>
@@ -169,19 +147,9 @@ $playType = $row['play_type'] ?? 'single';
     </label>
     <label class="span-2">Remarks<textarea name="remarks" rows="3"><?= bm_h($row['remarks'] ?? '') ?></textarea></label>
     <div class="form-actions span-2">
-      <button type="submit" class="btn btn-primary">Save player</button>
+      <button type="submit" class="btn btn-primary"><?= $id ? 'Save player' : 'Create & select category / event' ?></button>
       <a class="btn" href="players.php">Cancel</a>
     </div>
   </form>
 </section>
-<script>
-(function(){
-  var sel=document.getElementById('play_type');
-  var wrap=document.getElementById('partner-wrap');
-  if(!sel||!wrap)return;
-  function sync(){ if(sel.value==='double') wrap.classList.remove('is-hidden'); else wrap.classList.add('is-hidden'); }
-  sel.addEventListener('change',sync); sync();
-})();
-</script>
-<?php endif; ?>
 <?php require __DIR__ . '/includes/footer.php'; ?>
