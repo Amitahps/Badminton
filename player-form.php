@@ -40,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($aadhaar !== '' && strlen($aadhaar) !== 12) {
             throw new RuntimeException('Aadhaar number must be 12 digits.');
         }
+        bm_assert_unique_player_ids($pdo, $bai, $pbi, $id);
 
         $aadhaarFile = $row['aadhaar_file'] ?? null;
         $dobFile = $row['dob_certificate_file'] ?? null;

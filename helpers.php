@@ -191,6 +191,32 @@ function bm_clean_aadhaar(string $v): string
     return preg_replace('/\D+/', '', $v) ?? '';
 }
 
+/**
+ * Reject a second player with the same BAI ID or PBA ID (any name).
+ * Blank IDs are allowed. Editing the same player keeps their own IDs.
+ */
+function bm_assert_unique_player_ids(PDO $pdo, ?string $bai, ?string $pba, int $exceptPlayerId = 0): void
+{
+    $bai = trim((string)$bai);
+    $pba = trim((string)$pba);
+    if ($bai !== '') {
+        $st = $pdo->prepare('SELECT full_name FROM players WHERE LOWER(TRIM(bai_id)) = LOWER(?) AND id != ? LIMIT 1');
+        $st->execute([$bai, $exceptPlayerId]);
+        $name = $st->fetchColumn();
+        if ($name) {
+            throw new RuntimeException('BAI ID already used by ' . $name . '.');
+        }
+    }
+    if ($pba !== '') {
+        $st = $pdo->prepare('SELECT full_name FROM players WHERE LOWER(TRIM(pbi_id)) = LOWER(?) AND id != ? LIMIT 1');
+        $st->execute([$pba, $exceptPlayerId]);
+        $name = $st->fetchColumn();
+        if ($name) {
+            throw new RuntimeException('PBA ID already used by ' . $name . '.');
+        }
+    }
+}
+
 function bm_allowed_upload(string $name): bool
 {
     $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));

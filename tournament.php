@@ -31,6 +31,23 @@ foreach ($countStmt->fetchAll() as $r) {
     $teamCounts[(int)$r['age_category_id'] . '|' . $r['event_code']] = (int)$r['team_count'];
 }
 
+/** Players assigned to an event who are not yet on a saved team. */
+$unplacedStmt = $pdo->prepare("
+    SELECT COUNT(DISTINCT e.player_id)
+    FROM tournament_entries e
+    WHERE e.tournament_id = ?
+      AND e.age_category_id = ?
+      AND e.event_code = ?
+      AND e.player_id NOT IN (
+        SELECT m.player_id
+        FROM tournament_team_members m
+        JOIN tournament_teams t ON t.id = m.team_id
+        WHERE t.tournament_id = ?
+          AND t.age_category_id = ?
+          AND t.event_code = ?
+      )
+");
+
 // Build display rows: gender events per category; Mix Double once per age group
 $tableRows = [];
 $mixShown = [];
@@ -42,6 +59,7 @@ foreach ($categories as $c) {
             continue; // handled once below
         }
         $key = (int)$c['id'] . '|' . $code;
+        $unplacedStmt->execute([$id, (int)$c['id'], $code, $id, (int)$c['id'], $code]);
         $tableRows[] = [
             'label' => $c['name'],
             'for' => bm_gender_scope_label($scope),
@@ -49,6 +67,7 @@ foreach ($categories as $c) {
             'event_code' => $code,
             'category_id' => (int)$c['id'],
             'teams' => (int)($teamCounts[$key] ?? 0),
+            'not_in_team' => (int)$unplacedStmt->fetchColumn(),
         ];
     }
 }
@@ -69,6 +88,24 @@ foreach ($categories as $c) {
     foreach ($paired as $pcid) {
         $teamSum += (int)($teamCounts[$pcid . '|mix_double'] ?? 0);
     }
+    $inList = implode(',', array_fill(0, count($paired), '?'));
+    $mixUnplaced = $pdo->prepare("
+        SELECT COUNT(DISTINCT e.player_id)
+        FROM tournament_entries e
+        WHERE e.tournament_id = ?
+          AND e.event_code = 'mix_double'
+          AND e.age_category_id IN ($inList)
+          AND e.player_id NOT IN (
+            SELECT m.player_id
+            FROM tournament_team_members m
+            JOIN tournament_teams t ON t.id = m.team_id
+            WHERE t.tournament_id = ?
+              AND t.event_code = 'mix_double'
+              AND t.age_category_id IN ($inList)
+          )
+    ");
+    $mixUnplaced->execute(array_merge([$id], $paired, [$id], $paired));
+    $mixNotInTeam = (int)$mixUnplaced->fetchColumn();
     // Prefer boys category as the open link (still pools both in teams page)
     $linkId = (int)$c['id'];
     foreach ($categories as $pc) {
@@ -85,6 +122,7 @@ foreach ($categories as $c) {
         'event_code' => 'mix_double',
         'category_id' => $linkId,
         'teams' => $teamSum,
+        'not_in_team' => $mixNotInTeam,
     ];
 }
 
@@ -123,6 +161,7 @@ require __DIR__ . '/includes/header.php';
         <th>For</th>
         <th>Event</th>
         <th>Teams saved</th>
+        <th>Players not in team</th>
         <th></th>
       </tr>
     </thead>
@@ -133,6 +172,7 @@ require __DIR__ . '/includes/header.php';
         <td><?= bm_h($row['for']) ?></td>
         <td><?= bm_h($row['event_label']) ?></td>
         <td><?= (int)$row['teams'] ?></td>
+        <td><?= (int)($row['not_in_team'] ?? 0) ?></td>
         <td class="right">
           <a class="btn btn-sm btn-primary" href="tournament-teams.php?tournament_id=<?= $id ?>&category_id=<?= (int)$row['category_id'] ?>&event=<?= urlencode($row['event_code']) ?>">Open &amp; form teams</a>
         </td>
