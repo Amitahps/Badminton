@@ -65,6 +65,7 @@ require __DIR__ . '/includes/header.php';
   <table class="table">
     <thead>
       <tr>
+        <th>S.No.</th>
         <th>Name</th>
         <th>Gender</th>
         <th>BAI / PBA</th>
@@ -73,8 +74,9 @@ require __DIR__ . '/includes/header.php';
       </tr>
     </thead>
     <tbody>
-    <?php foreach ($rows as $r): ?>
+    <?php foreach ($rows as $i => $r): ?>
       <tr>
+        <td><?= (int)$i + 1 ?></td>
         <td><strong><?= bm_h($r['full_name']) ?></strong></td>
         <td><?= bm_h(bm_gender_label($r['gender'] ?? '')) ?></td>
         <td><?= bm_h(($r['bai_id'] ?: '—') . ' / ' . ($r['pbi_id'] ?: '—')) ?></td>
