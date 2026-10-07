@@ -46,12 +46,13 @@ require __DIR__ . '/includes/header.php';
     <h1>Players</h1>
     <p class="lede">One-time player list (name, gender, documents). Age categories and events are chosen later inside each tournament.</p>
   </div>
-  <div class="page-actions">
+  <div class="page-actions no-print">
+    <button type="button" class="btn" onclick="window.print()">Print</button>
     <a class="btn btn-primary" href="player-form.php">Add player</a>
   </div>
 </section>
 <section class="panel">
-  <form method="get" class="filters">
+  <form method="get" class="filters no-print">
     <input type="search" name="q" value="<?= bm_h($q) ?>" placeholder="Search name / BAI / PBA">
     <select name="gender">
       <option value="">All genders</option>
@@ -70,7 +71,7 @@ require __DIR__ . '/includes/header.php';
         <th>Gender</th>
         <th>BAI / PBA</th>
         <th>Mobile</th>
-        <th></th>
+        <th class="no-print"></th>
       </tr>
     </thead>
     <tbody>
@@ -81,7 +82,7 @@ require __DIR__ . '/includes/header.php';
         <td><?= bm_h(bm_gender_label($r['gender'] ?? '')) ?></td>
         <td><?= bm_h(($r['bai_id'] ?: '—') . ' / ' . ($r['pbi_id'] ?: '—')) ?></td>
         <td><?= bm_h($r['mobile'] ?: '—') ?></td>
-        <td class="right actions">
+        <td class="right actions no-print">
           <a class="btn btn-sm" href="player-form.php?id=<?= (int)$r['id'] ?>">Edit</a>
           <form method="post" class="inline" onsubmit="return confirm('Remove this player permanently?');">
             <input type="hidden" name="delete_id" value="<?= (int)$r['id'] ?>">

@@ -92,7 +92,35 @@ if (isset($_GET['format']) && $_GET['format'] === 'csv') {
     exit;
 }
 
-$filterQs = 'tournament_id=' . $tournamentId . '&category_id=' . $categoryId;
+$stTournament = (int)($_GET['st_tournament'] ?? 0);
+$stCategory = (int)($_GET['st_category'] ?? 0);
+$stEvent = trim((string)($_GET['st_event'] ?? ''));
+$stName = trim((string)($_GET['player_name'] ?? ''));
+$savedOn = isset($_GET['saved']);
+$foundTeams = [];
+if ($savedOn) {
+    $foundTeams = bm_find_saved_teams($pdo, $stTournament, $stCategory, $stEvent, $stName);
+}
+
+$filterQs = http_build_query([
+    'tournament_id' => $tournamentId,
+    'category_id' => $categoryId,
+    'st_tournament' => $stTournament,
+    'st_category' => $stCategory,
+    'st_event' => $stEvent,
+    'player_name' => $stName,
+] + ($savedOn ? ['saved' => 1] : []));
+$clearTotalsQs = http_build_query([
+    'st_tournament' => $stTournament,
+    'st_category' => $stCategory,
+    'st_event' => $stEvent,
+    'player_name' => $stName,
+] + ($savedOn ? ['saved' => 1] : []));
+$clearSavedQs = http_build_query([
+    'tournament_id' => $tournamentId,
+    'category_id' => $categoryId,
+]);
+$wrapClass = 'wrap-wide';
 $pageTitle = 'Team report · Badminton';
 require __DIR__ . '/includes/header.php';
 ?>
@@ -102,13 +130,21 @@ require __DIR__ . '/includes/header.php';
     <h1>Team totals</h1>
     <p class="lede">Saved teams: Boys Singles, Girls Singles, Boys Doubles, Girls Doubles, and Mix Doubles. View all tournaments, or filter by tournament and age category.</p>
   </div>
-  <div class="page-actions">
+  <div class="page-actions no-print">
+    <button type="button" class="btn" onclick="window.print()">Print</button>
     <a class="btn" href="report.php?<?= bm_h($filterQs) ?>&format=csv">Download CSV</a>
   </div>
 </section>
 
-<section class="panel">
+<div class="report-layout">
+<div>
+<section class="panel no-print">
   <form method="get" class="filters">
+    <?php if ($savedOn): ?><input type="hidden" name="saved" value="1"><?php endif; ?>
+    <input type="hidden" name="st_tournament" value="<?= $stTournament ?>">
+    <input type="hidden" name="st_category" value="<?= $stCategory ?>">
+    <input type="hidden" name="st_event" value="<?= bm_h($stEvent) ?>">
+    <input type="hidden" name="player_name" value="<?= bm_h($stName) ?>">
     <select name="tournament_id">
       <option value="0">All tournaments</option>
       <?php foreach ($tournaments as $t): ?>
@@ -122,7 +158,7 @@ require __DIR__ . '/includes/header.php';
       <?php endforeach; ?>
     </select>
     <button type="submit" class="btn btn-primary">Show report</button>
-    <a class="btn" href="report.php">Clear</a>
+    <a class="btn" href="report.php?<?= bm_h($clearTotalsQs) ?>">Clear</a>
   </form>
 </section>
 
@@ -178,4 +214,72 @@ require __DIR__ . '/includes/header.php';
   <p class="empty">No saved teams for this filter.</p>
   <?php endif; ?>
 </section>
+</div>
+
+<aside class="report-side no-print" id="saved-teams">
+  <section class="panel">
+    <div class="panel-head"><h2>Saved teams</h2></div>
+    <p class="lede">Pick a tournament, age category, event, or type a player name. The list shows teams where that player is already saved.</p>
+    <form method="get" class="filters" action="report.php#saved-teams">
+      <input type="hidden" name="saved" value="1">
+      <input type="hidden" name="tournament_id" value="<?= $tournamentId ?>">
+      <input type="hidden" name="category_id" value="<?= $categoryId ?>">
+      <select name="st_tournament">
+        <option value="0">All tournaments</option>
+        <?php foreach ($tournaments as $t): ?>
+          <option value="<?= (int)$t['id'] ?>" <?= $stTournament === (int)$t['id'] ? 'selected' : '' ?>><?= bm_h($t['name']) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <select name="st_category">
+        <option value="0">All age categories</option>
+        <?php foreach ($categories as $c): ?>
+          <option value="<?= (int)$c['id'] ?>" <?= $stCategory === (int)$c['id'] ? 'selected' : '' ?>><?= bm_h($c['name']) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <select name="st_event">
+        <option value="">All events</option>
+        <?php foreach (bm_event_defs() as $code => $def): ?>
+          <option value="<?= bm_h($code) ?>" <?= $stEvent === $code ? 'selected' : '' ?>><?= bm_h($def['label']) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <input type="search" name="player_name" value="<?= bm_h($stName) ?>" placeholder="Player name">
+      <button type="submit" class="btn btn-primary">Show teams</button>
+      <a class="btn" href="report.php?<?= bm_h($clearSavedQs) ?>#saved-teams">Clear</a>
+    </form>
+    <?php if ($savedOn): ?>
+      <?php if ($foundTeams): ?>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>S.No.</th>
+            <?php if ($stTournament === 0): ?><th>Tournament</th><?php endif; ?>
+            <th>Event</th>
+            <th>Players saved in team</th>
+          </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($foundTeams as $i => $team): ?>
+          <tr>
+            <td><?= $i + 1 ?></td>
+            <?php if ($stTournament === 0): ?><td><?= bm_h($team['tournament_name']) ?></td><?php endif; ?>
+            <td><strong><?= bm_h($team['heading']) ?></strong></td>
+            <td>
+              <?php foreach ($team['members'] as $m): ?>
+                <?php $hit = $stName !== '' && stripos((string)$m['full_name'], $stName) !== false; ?>
+                <div><?= $hit ? '<strong>' : '' ?><?= bm_h($m['full_name']) ?><?= $hit ? '</strong>' : '' ?>
+                  <span class="muted">(<?= bm_h(bm_gender_label($m['gender'])) ?><?= $m['bai_id'] ? ' · BAI ' . bm_h($m['bai_id']) : '' ?><?= $m['pbi_id'] ? ' · PBA ' . bm_h($m['pbi_id']) : '' ?>)</span>
+                </div>
+              <?php endforeach; ?>
+            </td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+      <?php else: ?>
+      <p class="empty">No saved team matches this tournament, category, event, or player name.</p>
+      <?php endif; ?>
+    <?php endif; ?>
+  </section>
+</aside>
+</div>
 <?php require __DIR__ . '/includes/footer.php'; ?>
