@@ -69,7 +69,6 @@ foreach ($teams as $team) {
         $byGroup[$group]['sort'] = (int)$team['sort_order'];
         $byGroup[$group]['label'] = $group;
     }
-    $before = $byGroup[$group];
     $bump($byGroup[$group], (string)$team['event_code'], $scope);
     $bump($totals, (string)$team['event_code'], $scope);
 }

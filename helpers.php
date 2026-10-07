@@ -192,6 +192,79 @@ function bm_clean_aadhaar(string $v): string
 }
 
 /**
+ * Saved teams for a tournament (0 = all), optional category, event, and player name.
+ * Mix Double teams are stored on one category of the age group, so a boys or girls
+ * category still returns the Mix Double teams of that age group.
+ * Each row includes members and a letter-style heading.
+ *
+ * @return list<array<string,mixed>>
+ */
+function bm_find_saved_teams(PDO $pdo, int $tournamentId, int $categoryId, string $eventCode, string $playerName): array
+{
+    $sql = "
+        SELECT DISTINCT t.id, t.tournament_id, t.team_label, t.event_code, t.age_category_id,
+               c.name AS category_name, c.gender_scope, c.age_group, c.sort_order,
+               tn.name AS tournament_name
+        FROM tournament_teams t
+        JOIN age_categories c ON c.id = t.age_category_id
+        JOIN tournaments tn ON tn.id = t.tournament_id
+        JOIN tournament_team_members mf ON mf.team_id = t.id
+        JOIN players pf ON pf.id = mf.player_id
+        WHERE 1=1
+    ";
+    $params = [];
+    if ($tournamentId > 0) {
+        $sql .= ' AND t.tournament_id = ?';
+        $params[] = $tournamentId;
+    }
+    if ($categoryId > 0) {
+        $catSt = $pdo->prepare('SELECT * FROM age_categories WHERE id = ?');
+        $catSt->execute([$categoryId]);
+        $cat = $catSt->fetch();
+        $paired = $cat ? bm_paired_category_ids($pdo, $cat) : [$categoryId];
+        $in = implode(',', array_fill(0, count($paired), '?'));
+        $sql .= " AND (t.age_category_id = ? OR (t.event_code = 'mix_double' AND t.age_category_id IN ($in)))";
+        $params[] = $categoryId;
+        foreach ($paired as $pid) {
+            $params[] = $pid;
+        }
+    }
+    $eventCode = trim($eventCode);
+    if ($eventCode !== '' && isset(bm_event_defs()[$eventCode])) {
+        $sql .= ' AND t.event_code = ?';
+        $params[] = $eventCode;
+    }
+    $playerName = trim($playerName);
+    if ($playerName !== '') {
+        $like = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $playerName);
+        $sql .= " AND pf.full_name LIKE ? ESCAPE '\\'";
+        $params[] = '%' . $like . '%';
+    }
+    $sql .= ' ORDER BY tn.date_from DESC, c.sort_order, c.name, t.event_code, t.id';
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    $teams = $st->fetchAll();
+    $ms = $pdo->prepare("
+        SELECT p.id, p.full_name, p.gender, p.bai_id, p.pbi_id
+        FROM players p
+        JOIN tournament_team_members m ON m.player_id = p.id
+        WHERE m.team_id = ?
+        ORDER BY CASE p.gender WHEN 'boy' THEN 0 ELSE 1 END, p.full_name
+    ");
+    foreach ($teams as &$team) {
+        $ms->execute([(int)$team['id']]);
+        $team['members'] = $ms->fetchAll();
+        $team['heading'] = bm_letter_heading([
+            'name' => $team['category_name'],
+            'gender_scope' => $team['gender_scope'] ?: 'open',
+            'age_group' => $team['age_group'],
+        ], (string)$team['event_code']);
+    }
+    unset($team);
+    return $teams;
+}
+
+/**
  * Reject a second player with the same BAI ID or PBA ID (any name).
  * Blank IDs are allowed. Editing the same player keeps their own IDs.
  */

@@ -126,6 +126,15 @@ foreach ($categories as $c) {
     ];
 }
 
+$lookCategory = (int)($_GET['look_category'] ?? 0);
+$lookEvent = trim((string)($_GET['look_event'] ?? ''));
+$lookName = trim((string)($_GET['player_name'] ?? ''));
+$lookupOn = isset($_GET['lookup']);
+$foundTeams = [];
+if ($lookupOn) {
+    $foundTeams = bm_find_saved_teams($pdo, $id, $lookCategory, $lookEvent, $lookName);
+}
+
 $dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
 $pageTitle = $tournament['name'] . ' · Badminton';
 require __DIR__ . '/includes/header.php';
@@ -180,6 +189,60 @@ require __DIR__ . '/includes/header.php';
     <?php endforeach; ?>
     </tbody>
   </table>
+  <?php endif; ?>
+</section>
+
+<section class="panel" id="team-lookup">
+  <div class="panel-head"><h2>Find saved teams</h2></div>
+  <p class="lede">Choose an age category, an event, or type a player name. The list shows teams in this tournament where that player is already saved.</p>
+  <form method="get" class="filters">
+    <input type="hidden" name="id" value="<?= $id ?>">
+    <input type="hidden" name="lookup" value="1">
+    <select name="look_category">
+      <option value="0">All age categories</option>
+      <?php foreach ($categories as $c): ?>
+        <option value="<?= (int)$c['id'] ?>" <?= $lookCategory === (int)$c['id'] ? 'selected' : '' ?>><?= bm_h($c['name']) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <select name="look_event">
+      <option value="">All events</option>
+      <?php foreach (bm_event_defs() as $code => $def): ?>
+        <option value="<?= bm_h($code) ?>" <?= $lookEvent === $code ? 'selected' : '' ?>><?= bm_h($def['label']) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <input type="search" name="player_name" value="<?= bm_h($lookName) ?>" placeholder="Player name">
+    <button type="submit" class="btn btn-primary">Show teams</button>
+    <a class="btn" href="tournament.php?id=<?= $id ?>">Clear</a>
+  </form>
+  <?php if ($lookupOn): ?>
+    <?php if ($foundTeams): ?>
+    <table class="table">
+      <thead>
+        <tr><th>S.No.</th><th>Event</th><th>Team</th><th>Players saved in team</th></tr>
+      </thead>
+      <tbody>
+      <?php foreach ($foundTeams as $i => $team): ?>
+        <tr>
+          <td><?= $i + 1 ?></td>
+          <td><strong><?= bm_h($team['heading']) ?></strong></td>
+          <td><?= bm_h($team['team_label'] ?: 'Team') ?></td>
+          <td>
+            <?php foreach ($team['members'] as $m): ?>
+              <?php
+                $hit = $lookName !== '' && stripos((string)$m['full_name'], $lookName) !== false;
+              ?>
+              <div><?= $hit ? '<strong>' : '' ?><?= bm_h($m['full_name']) ?><?= $hit ? '</strong>' : '' ?>
+                <span class="muted">(<?= bm_h(bm_gender_label($m['gender'])) ?><?= $m['bai_id'] ? ' · BAI ' . bm_h($m['bai_id']) : '' ?><?= $m['pbi_id'] ? ' · PBA ' . bm_h($m['pbi_id']) : '' ?>)</span>
+              </div>
+            <?php endforeach; ?>
+          </td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+    <?php else: ?>
+    <p class="empty">No saved team matches this category, event, or player name.</p>
+    <?php endif; ?>
   <?php endif; ?>
 </section>
 <?php require __DIR__ . '/includes/footer.php'; ?>
