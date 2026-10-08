@@ -191,6 +191,16 @@ function bm_clean_aadhaar(string $v): string
     return preg_replace('/\D+/', '', $v) ?? '';
 }
 
+/** Address from the player form (falls back to older remarks text). */
+function bm_player_address(array $player): string
+{
+    $address = trim((string)($player['address'] ?? ''));
+    if ($address !== '') {
+        return $address;
+    }
+    return trim((string)($player['remarks'] ?? ''));
+}
+
 /**
  * Saved teams for a tournament (0 = all), optional category, event, and player name.
  * Mix Double teams are stored on one category of the age group, so a boys or girls

@@ -155,7 +155,7 @@ if ($fmt === 'csv') {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="participants_' . preg_replace('/[^A-Za-z0-9_-]+/', '_', $tournament['name']) . '.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['Section', 'Team No', 'Player Name', 'Gender', 'BAI ID', 'PBA ID', 'Aadhaar', 'DOB']);
+    fputcsv($out, ['Section', 'Team No', 'Player Name', 'Gender', 'BAI ID', 'PBA ID', 'Aadhaar', 'DOB', 'Address']);
     foreach ($grouped as $block) {
         foreach ($block['teams'] as $ti => $team) {
             foreach ($team['members'] as $p) {
@@ -168,6 +168,7 @@ if ($fmt === 'csv') {
                     $p['pbi_id'] ?: '',
                     $p['aadhaar_no'] ?: '',
                     $p['dob'] ? bm_fmt_date($p['dob']) : '',
+                    bm_player_address($p),
                 ]);
             }
         }
@@ -251,6 +252,7 @@ require __DIR__ . '/includes/header.php';
                 <th>PBA ID</th>
                 <th>Aadhaar</th>
                 <th>DOB</th>
+                <th>Address</th>
               </tr>
             </thead>
             <tbody>
@@ -266,6 +268,7 @@ require __DIR__ . '/includes/header.php';
                 <td><?= bm_h($p['pbi_id'] ?: '—') ?></td>
                 <td><?= bm_h($p['aadhaar_no'] ?: '—') ?></td>
                 <td><?= bm_h(!empty($p['dob']) ? bm_fmt_date($p['dob']) : '—') ?></td>
+                <td><?= bm_h(($addr = bm_player_address($p)) !== '' ? $addr : '—') ?></td>
               </tr>
               <?php endforeach; ?>
             <?php endforeach; ?>

@@ -107,6 +107,7 @@ a { color: var(--court-dark); }
 .letter-category h2 { font-size: 1.15rem; margin: 0 0 0.5rem; border-bottom: 1px solid #333; padding-bottom: 0.25rem; }
 .letter-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-bottom: 0.5rem; }
 .letter-table th, .letter-table td { border: 1px solid #333; padding: 0.35rem 0.45rem; text-align: left; }
+.letter-table td { white-space: pre-line; }
 .letter-sign { margin-top: 2rem; }
 .wrap-wide { width: min(1280px, calc(100% - 2rem)); }
 .report-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.9fr); gap: 1rem; align-items: start; }

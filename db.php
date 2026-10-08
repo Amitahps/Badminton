@@ -106,6 +106,7 @@ function bm_init_schema(PDO $pdo): void
             dob_certificate_file TEXT,
             mobile TEXT,
             remarks TEXT,
+            address TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             FOREIGN KEY (age_category_id) REFERENCES age_categories(id) ON DELETE RESTRICT
@@ -293,6 +294,15 @@ function bm_migrate_schema(PDO $pdo): void
 
     if (bm_table_exists($pdo, 'users') && !bm_column_exists($pdo, 'users', 'recovery_key_hash')) {
         $pdo->exec('ALTER TABLE users ADD COLUMN recovery_key_hash TEXT');
+    }
+
+    if (bm_table_exists($pdo, 'players')) {
+        if (!bm_column_exists($pdo, 'players', 'address')) {
+            $pdo->exec('ALTER TABLE players ADD COLUMN address TEXT');
+        }
+        if (bm_column_exists($pdo, 'players', 'remarks')) {
+            $pdo->exec("UPDATE players SET address = remarks WHERE (address IS NULL OR TRIM(address) = '') AND remarks IS NOT NULL AND TRIM(remarks) != ''");
+        }
     }
 }
 

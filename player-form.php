@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $dob = bm_parse_date_input($dobRaw);
         }
         $mobile = trim((string)($_POST['mobile'] ?? ''));
-        $remarks = trim((string)($_POST['remarks'] ?? ''));
+        $address = trim((string)($_POST['address'] ?? $_POST['remarks'] ?? ''));
 
         if ($fullName === '') {
             throw new RuntimeException('Player name is required.');
@@ -67,14 +67,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Keep existing category/event on edit of basic details
             $pdo->prepare("UPDATE players SET
                 full_name=?, gender=?, bai_id=?, pbi_id=?, aadhaar_no=?, aadhaar_file=?, dob=?,
-                dob_certificate_file=?, mobile=?, remarks=?,
+                dob_certificate_file=?, mobile=?, remarks=?, address=?,
                 updated_at=datetime('now','localtime')
                 WHERE id=?")->execute([
                 $fullName, $gender,
                 $bai !== '' ? $bai : null, $pbi !== '' ? $pbi : null,
                 $aadhaar !== '' ? $aadhaar : null, $aadhaarFile,
                 $dob, $dobFile,
-                $mobile !== '' ? $mobile : null, $remarks !== '' ? $remarks : null,
+                $mobile !== '' ? $mobile : null,
+                $address !== '' ? $address : null,
+                $address !== '' ? $address : null,
                 $id,
             ]);
             bm_flash('success', 'Player details updated.');
@@ -83,13 +85,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare("INSERT INTO players (
                 full_name, gender, age_category_id, event_code,
                 bai_id, pbi_id, aadhaar_no, aadhaar_file, dob, dob_certificate_file,
-                mobile, remarks
-            ) VALUES (?,?,NULL,NULL,?,?,?,?,?,?,?,?)")->execute([
+                mobile, remarks, address
+            ) VALUES (?,?,NULL,NULL,?,?,?,?,?,?,?,?,?)")->execute([
                 $fullName, $gender,
                 $bai !== '' ? $bai : null, $pbi !== '' ? $pbi : null,
                 $aadhaar !== '' ? $aadhaar : null, $aadhaarFile,
                 $dob, $dobFile,
-                $mobile !== '' ? $mobile : null, $remarks !== '' ? $remarks : null,
+                $mobile !== '' ? $mobile : null,
+                $address !== '' ? $address : null,
+                $address !== '' ? $address : null,
             ]);
             bm_flash('success', 'Player added to the list. Age category and events are chosen inside each tournament.');
             bm_redirect('players.php');
@@ -115,6 +119,10 @@ if (!empty($row['dob'])) {
     }
 } elseif (!empty($_POST['dob'])) {
     $dobDisplay = trim((string)$_POST['dob']);
+}
+$addressDisplay = bm_player_address($row ?: []);
+if ($addressDisplay === '' && !empty($_POST['address'])) {
+    $addressDisplay = trim((string)$_POST['address']);
 }
 ?>
 <section class="page-head">
@@ -160,7 +168,7 @@ if (!empty($row['dob'])) {
         </span>
       <?php endif; ?>
     </label>
-    <label class="span-2">Remarks<textarea name="remarks" rows="3"><?= bm_h($row['remarks'] ?? '') ?></textarea></label>
+    <label class="span-2">Address<textarea name="address" rows="3"><?= bm_h($addressDisplay) ?></textarea></label>
     <div class="form-actions span-2">
       <button type="submit" class="btn btn-primary"><?= $id ? 'Save player' : 'Save player' ?></button>
       <a class="btn" href="players.php">Cancel</a>
