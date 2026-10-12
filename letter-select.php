@@ -13,7 +13,7 @@ if (!$tournament) {
     bm_redirect('tournaments.php');
 }
 
-if (isset($_POST['save_selection']) || isset($_POST['save_and_open'])) {
+if (isset($_POST['save_selection']) || isset($_POST['save_and_open']) || isset($_POST['save_and_open_parents'])) {
     $selected = $_POST['team_ids'] ?? [];
     if (!is_array($selected)) {
         $selected = [];
@@ -36,6 +36,9 @@ if (isset($_POST['save_selection']) || isset($_POST['save_and_open'])) {
     $pdo->prepare("UPDATE tournaments SET letter_columns=?, updated_at=datetime('now','localtime') WHERE id=?")
         ->execute([$cols, $id]);
     bm_flash('success', $on . ' team(s) selected for the letter. Only ticked columns will appear.');
+    if (isset($_POST['save_and_open_parents'])) {
+        bm_redirect('letter.php?id=' . $id . '&for=parents');
+    }
     if (isset($_POST['save_and_open'])) {
         bm_redirect('letter.php?id=' . $id);
     }
@@ -106,6 +109,8 @@ require __DIR__ . '/includes/header.php';
     <p class="lede">Tick <strong>all</strong> or only a <strong>few</strong> teams. Only selected teams will appear in the one letter / PDF / CSV. Extra columns (gender, BAI, PBA, Aadhaar, date of birth, address) appear only if you tick them.</p>
   </div>
   <div class="page-actions">
+    <a class="btn" href="letter.php?id=<?= $id ?>">Open letter PDF</a>
+    <a class="btn" href="letter.php?id=<?= $id ?>&amp;for=parents">Parents &amp; coaches PDF</a>
     <a class="btn" href="tournament.php?id=<?= $id ?>">Back to tournament</a>
   </div>
 </section>
@@ -158,6 +163,7 @@ require __DIR__ . '/includes/header.php';
     <div class="form-actions">
       <button type="submit" name="save_selection" value="1" class="btn">Save selection</button>
       <button type="submit" name="save_and_open" value="1" class="btn btn-primary">Save &amp; open letter</button>
+      <button type="submit" name="save_and_open_parents" value="1" class="btn">Save &amp; open parents &amp; coaches PDF</button>
     </div>
   </form>
 </section>

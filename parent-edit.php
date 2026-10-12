@@ -103,6 +103,7 @@ require __DIR__ . '/includes/header.php';
   </div>
   <div class="page-actions">
     <a class="btn" href="letter.php?id=<?= (int)$tournament['id'] ?>">Open letter PDF</a>
+    <a class="btn" href="letter.php?id=<?= (int)$tournament['id'] ?>&amp;for=parents">Parents &amp; coaches PDF</a>
     <a class="btn" href="tournament.php?id=<?= (int)$tournament['id'] ?>">Back</a>
   </div>
 </section>

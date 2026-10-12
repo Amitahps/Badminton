@@ -125,6 +125,11 @@ function bm_init_schema(PDO $pdo): void
             letter_subject TEXT,
             letter_body TEXT,
             letter_columns TEXT,
+            letter_parents_to TEXT,
+            letter_parents_sign TEXT,
+            letter_parents_date TEXT,
+            letter_parents_subject TEXT,
+            letter_parents_body TEXT,
             public_token TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
@@ -308,6 +313,21 @@ function bm_migrate_schema(PDO $pdo): void
         }
         if (!bm_column_exists($pdo, 'tournaments', 'letter_columns')) {
             $pdo->exec('ALTER TABLE tournaments ADD COLUMN letter_columns TEXT');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'letter_parents_to')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN letter_parents_to TEXT');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'letter_parents_sign')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN letter_parents_sign TEXT');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'letter_parents_date')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN letter_parents_date TEXT');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'letter_parents_subject')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN letter_parents_subject TEXT');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'letter_parents_body')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN letter_parents_body TEXT');
         }
         if (!bm_column_exists($pdo, 'tournaments', 'public_token')) {
             $pdo->exec('ALTER TABLE tournaments ADD COLUMN public_token TEXT');

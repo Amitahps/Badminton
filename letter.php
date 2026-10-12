@@ -6,6 +6,7 @@ $pdo = bm_db();
 
 $id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
 $fmt = strtolower(trim((string)($_GET['format'] ?? 'letter')));
+$forParents = ((string)($_GET['for'] ?? $_POST['letter_for'] ?? '')) === 'parents';
 
 $stmt = $pdo->prepare('SELECT * FROM tournaments WHERE id = ?');
 $stmt->execute([$id]);
@@ -17,11 +18,16 @@ if (!$tournament) {
 
 $heldAt = $tournament['held_at'];
 $dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
-$defaultTo = "The Secretary\nPunjab Badminton Association";
 $defaultSign = "Member\nDistrict Badminton Association\nHoshiarpur";
-$defaultSubject = 'Details of Players Participating in the Tournament Held at ' . $heldAt . ' on ' . $dateText;
-$defaultBody = 'With due respect, please find below the details of the players participating in the badminton tournament being held at ' . $heldAt . ' on ' . $dateText . '. The list of players is provided category-wise and event-wise for your kind information and record.';
 $defaultDate = date('d-m-Y');
+$defaultSubject = 'Details of Players Participating in the Tournament Held at ' . $heldAt . ' on ' . $dateText;
+if ($forParents) {
+    $defaultTo = "Parents and Coaches";
+    $defaultBody = 'Please find below the details of the players participating in the badminton tournament being held at ' . $heldAt . ' on ' . $dateText . '. The list of players is provided category-wise and event-wise for your kind information.';
+} else {
+    $defaultTo = "The Secretary\nPunjab Badminton Association";
+    $defaultBody = 'With due respect, please find below the details of the players participating in the badminton tournament being held at ' . $heldAt . ' on ' . $dateText . '. The list of players is provided category-wise and event-wise for your kind information and record.';
+}
 
 if (isset($_POST['save_letter'])) {
     $to = trim((string)($_POST['letter_to'] ?? ''));
@@ -44,6 +50,12 @@ if (isset($_POST['save_letter'])) {
     if ($body === '') {
         $body = $defaultBody;
     }
+    if ($forParents) {
+        $pdo->prepare("UPDATE tournaments SET letter_parents_to=?, letter_parents_sign=?, letter_parents_date=?, letter_parents_subject=?, letter_parents_body=?, updated_at=datetime('now','localtime') WHERE id=?")
+            ->execute([$to, $sign, $letterDate, $subject, $body, $id]);
+        bm_flash('success', 'Parents and coaches letter saved. You can edit again anytime before print / copy.');
+        bm_redirect('letter.php?id=' . $id . '&for=parents');
+    }
     $cols = bm_letter_fields_from_post($_POST);
     $pdo->prepare("UPDATE tournaments SET letter_to=?, letter_sign=?, letter_date=?, letter_subject=?, letter_body=?, letter_columns=?, updated_at=datetime('now','localtime') WHERE id=?")
         ->execute([$to, $sign, $letterDate, $subject, $body, $cols, $id]);
@@ -51,26 +63,41 @@ if (isset($_POST['save_letter'])) {
     bm_redirect('letter.php?id=' . $id);
 }
 
-$letterTo = trim((string)($tournament['letter_to'] ?? ''));
+if ($forParents) {
+    $letterTo = trim((string)($tournament['letter_parents_to'] ?? ''));
+    $letterSign = trim((string)($tournament['letter_parents_sign'] ?? ''));
+    $letterDate = trim((string)($tournament['letter_parents_date'] ?? ''));
+    $letterSubject = trim((string)($tournament['letter_parents_subject'] ?? ''));
+    $letterBody = trim((string)($tournament['letter_parents_body'] ?? ''));
+    if ($letterSign === '') {
+        $letterSign = trim((string)($tournament['letter_sign'] ?? ''));
+    }
+    if ($letterDate === '') {
+        $letterDate = trim((string)($tournament['letter_date'] ?? ''));
+    }
+} else {
+    $letterTo = trim((string)($tournament['letter_to'] ?? ''));
+    $letterSign = trim((string)($tournament['letter_sign'] ?? ''));
+    $letterDate = trim((string)($tournament['letter_date'] ?? ''));
+    $letterSubject = trim((string)($tournament['letter_subject'] ?? ''));
+    $letterBody = trim((string)($tournament['letter_body'] ?? ''));
+}
 if ($letterTo === '') {
     $letterTo = $defaultTo;
 }
-$letterSign = trim((string)($tournament['letter_sign'] ?? ''));
 if ($letterSign === '') {
     $letterSign = $defaultSign;
 }
-$letterDate = trim((string)($tournament['letter_date'] ?? ''));
 if ($letterDate === '') {
     $letterDate = $defaultDate;
 }
-$letterSubject = trim((string)($tournament['letter_subject'] ?? ''));
 if ($letterSubject === '') {
     $letterSubject = $defaultSubject;
 }
-$letterBody = trim((string)($tournament['letter_body'] ?? ''));
 if ($letterBody === '') {
     $letterBody = $defaultBody;
 }
+$letterGreeting = $forParents ? 'Dear Parents and Coaches,' : 'Sir/Madam,';
 $letterFields = bm_letter_fields_enabled($tournament['letter_columns'] ?? null);
 
 // Only teams ticked for letter
@@ -194,7 +221,7 @@ if ($fmt === 'csv') {
     exit;
 }
 
-$pageTitle = 'Participating List · ' . $tournament['name'];
+$pageTitle = ($forParents ? 'Parents & coaches list' : 'Participating List') . ' · ' . $tournament['name'];
 require __DIR__ . '/includes/header.php';
 ?>
 <style>
@@ -210,27 +237,39 @@ require __DIR__ . '/includes/header.php';
 </style>
 <section class="page-head no-print">
   <div>
-    <p class="eyebrow">Export</p>
-    <h1>Participating players list</h1>
+    <p class="eyebrow"><?= $forParents ? 'Parents &amp; coaches' : 'Export' ?></p>
+    <h1><?= $forParents ? 'Parents and coaches list' : 'Participating players list' ?></h1>
+    <?php if ($forParents): ?>
+    <p class="lede">Showing <strong><?= $selCount ?></strong> of <?= $totalTeams ?> team(s). Same one-file letter/PDF as the official letter — for parents and coaches. Extra columns match what you ticked on the letter.</p>
+    <?php else: ?>
     <p class="lede">Showing <strong><?= $selCount ?></strong> of <?= $totalTeams ?> team(s). This is one letter/PDF for the whole tournament — not a file per parent. Only the extra columns you tick below appear on the letter.</p>
+    <?php endif; ?>
   </div>
   <div class="page-actions">
     <a class="btn btn-primary" href="letter-select.php?tournament_id=<?= $id ?>">Select teams</a>
     <button type="button" class="btn" id="copy-letter">Copy letter</button>
     <button type="button" class="btn" onclick="window.print()">Print / Save as PDF</button>
-    <a class="btn" href="letter.php?id=<?= $id ?>&format=csv">Download CSV</a>
+    <?php if ($forParents): ?>
+    <a class="btn" href="letter.php?id=<?= $id ?>">Official letter</a>
+    <?php else: ?>
+    <a class="btn" href="letter.php?id=<?= $id ?>&amp;for=parents">Parents &amp; coaches PDF</a>
+    <a class="btn" href="letter.php?id=<?= $id ?>&amp;format=csv">Download CSV</a>
+    <?php endif; ?>
     <a class="btn" href="tournament.php?id=<?= $id ?>">Back</a>
   </div>
 </section>
 
 <section class="panel no-print" style="max-width:720px;">
-  <div class="panel-head"><h2>Edit letter</h2></div>
+  <div class="panel-head"><h2><?= $forParents ? 'Edit parents &amp; coaches letter' : 'Edit letter' ?></h2></div>
   <form method="post" class="form">
     <input type="hidden" name="id" value="<?= $id ?>">
+    <?php if ($forParents): ?>
+    <input type="hidden" name="letter_for" value="parents">
+    <?php endif; ?>
     <label>Date (dd-mm-yyyy)
       <input type="text" name="letter_date" value="<?= bm_h($letterDate) ?>" maxlength="40" placeholder="dd-mm-yyyy">
     </label>
-    <label>To (editable — send to anyone)
+    <label><?= $forParents ? 'To (editable)' : 'To (editable — send to anyone)' ?>
       <textarea name="letter_to" rows="4" required><?= bm_h($letterTo) ?></textarea>
     </label>
     <label>Subject
@@ -242,6 +281,7 @@ require __DIR__ . '/includes/header.php';
     <label>Sign-off (editable)
       <textarea name="letter_sign" rows="4" required><?= bm_h($letterSign) ?></textarea>
     </label>
+    <?php if (!$forParents): ?>
     <fieldset class="letter-fields">
       <legend>Show in letter / PDF / Excel (player name is always shown)</legend>
       <?php foreach (bm_letter_field_defs() as $key => $label): ?>
@@ -251,8 +291,11 @@ require __DIR__ . '/includes/header.php';
         </label>
       <?php endforeach; ?>
     </fieldset>
+    <?php else: ?>
+    <p class="hint">Extra columns (gender, BAI, PBA, Aadhaar, date of birth, address) are the same as the official letter. Tick them there.</p>
+    <?php endif; ?>
     <div class="form-actions">
-      <button type="submit" name="save_letter" value="1" class="btn btn-primary">Save letter edits</button>
+      <button type="submit" name="save_letter" value="1" class="btn btn-primary"><?= $forParents ? 'Save parents &amp; coaches letter' : 'Save letter edits' ?></button>
     </div>
   </form>
 </section>
@@ -261,7 +304,7 @@ require __DIR__ . '/includes/header.php';
   <p class="letter-date">Date: <?= bm_h($letterDate) ?></p>
   <p>To<br><span class="letter-to"><?= bm_h($letterTo) ?></span></p>
   <p><strong>Subject:</strong> <?= bm_h($letterSubject) ?></p>
-  <p>Sir/Madam,</p>
+  <p><?= bm_h($letterGreeting) ?></p>
   <p class="letter-body"><?= bm_h($letterBody) ?></p>
 
   <?php if ($grouped): ?>

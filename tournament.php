@@ -152,6 +152,7 @@ require __DIR__ . '/includes/header.php';
   <div class="page-actions">
     <a class="btn btn-primary" href="tournament-entries.php?tournament_id=<?= $id ?>">Assign players / categories / events</a>
     <a class="btn" href="letter.php?id=<?= $id ?>">Share letter PDF</a>
+    <a class="btn" href="letter.php?id=<?= $id ?>&amp;for=parents">Share parents &amp; coaches PDF</a>
     <a class="btn" href="letter-select.php?tournament_id=<?= $id ?>">Select teams &amp; export letter</a>
     <a class="btn" href="tournament-form.php?id=<?= $id ?>">Edit details</a>
   </div>
@@ -165,7 +166,7 @@ require __DIR__ . '/includes/header.php';
     <button type="button" class="btn btn-primary" id="copy-parent-link">Copy link</button>
   </div>
   <?php if ($parentRows): ?>
-  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Edit or remove any entry. To share a PDF, use <a href="letter.php?id=<?= $id ?>">one letter for the whole tournament</a> — not a file per parent.</p>
+  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Edit or remove any entry. Share <a href="letter.php?id=<?= $id ?>">one official letter PDF</a> or <a href="letter.php?id=<?= $id ?>&amp;for=parents">one parents &amp; coaches PDF</a> — not a file per parent.</p>
   <table class="table">
     <thead><tr><th>When</th><th>Player</th><th>Age</th><th>Events</th><th></th></tr></thead>
     <tbody>
