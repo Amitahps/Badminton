@@ -129,7 +129,7 @@ foreach ($categories as $c) {
 $publicToken = bm_tournament_ensure_public_token($pdo, $tournament);
 $parentLink = bm_join_url($publicToken);
 $parentSubs = $pdo->prepare("
-    SELECT s.created_at, s.event_codes, c.name AS category_name, p.full_name
+    SELECT s.id, s.created_at, s.event_codes, s.receipt_code, c.name AS category_name, p.full_name
     FROM parent_submissions s
     JOIN age_categories c ON c.id = s.age_category_id
     JOIN players p ON p.id = s.primary_player_id
@@ -164,9 +164,9 @@ require __DIR__ . '/includes/header.php';
     <button type="button" class="btn btn-primary" id="copy-parent-link">Copy link</button>
   </div>
   <?php if ($parentRows): ?>
-  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Each parent can open only their own receipt.</p>
+  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Edit or remove any entry. Each parent can open only their own PDF copy.</p>
   <table class="table">
-    <thead><tr><th>When</th><th>Player</th><th>Age</th><th>Events</th></tr></thead>
+    <thead><tr><th>When</th><th>Player</th><th>Age</th><th>Events</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($parentRows as $ps): ?>
       <tr>
@@ -183,6 +183,14 @@ require __DIR__ . '/includes/header.php';
           }
           echo bm_h(implode(', ', $labs));
         ?></td>
+        <td class="right actions">
+          <a class="btn btn-sm" href="parent-edit.php?id=<?= (int)$ps['id'] ?>">Edit</a>
+          <a class="btn btn-sm" href="join-receipt.php?t=<?= bm_h(urlencode($publicToken)) ?>&amp;r=<?= bm_h(urlencode((string)$ps['receipt_code'])) ?>" target="_blank">PDF</a>
+          <form method="post" action="parent-edit.php" class="inline" onsubmit="return confirm('Remove this parent entry from the tournament, letter and Excel?');">
+            <input type="hidden" name="id" value="<?= (int)$ps['id'] ?>">
+            <button type="submit" name="delete_parent" value="1" class="btn btn-sm btn-danger">Remove</button>
+          </form>
+        </td>
       </tr>
     <?php endforeach; ?>
     </tbody>

@@ -206,7 +206,7 @@ function bm_parent_add_entry(PDO $pdo, int $tournamentId, int $playerId, int $ca
         ->execute([$tournamentId, $playerId, $categoryId, $eventCode]);
 }
 
-function bm_parent_add_team(PDO $pdo, int $tournamentId, int $catId, string $event, array $playerIds, array $busyCatIds): void
+function bm_parent_add_team(PDO $pdo, int $tournamentId, int $catId, string $event, array $playerIds, array $busyCatIds): int
 {
     $playerIds = array_values(array_unique(array_map('intval', $playerIds)));
     $catIn = implode(',', array_fill(0, count($busyCatIds), '?'));
@@ -235,6 +235,7 @@ function bm_parent_add_team(PDO $pdo, int $tournamentId, int $catId, string $eve
     foreach ($playerIds as $pid) {
         $ins->execute([$teamId, $pid]);
     }
+    return $teamId;
 }
 
 /**
@@ -326,17 +327,20 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post): ar
 
     $paired = bm_paired_category_ids($pdo, $cat);
     $pid = (int)$primary['id'];
+    $singleTeam = null;
+    $doubleTeam = null;
+    $mixTeam = null;
 
     $pdo->beginTransaction();
     try {
         foreach ($eventCodes as $code) {
             bm_parent_add_entry($pdo, $tournamentId, $pid, $catId, $code);
             if ($code === 'single') {
-                bm_parent_add_team($pdo, $tournamentId, $catId, 'single', [$pid], [$catId]);
+                $singleTeam = bm_parent_add_team($pdo, $tournamentId, $catId, 'single', [$pid], [$catId]);
             } elseif ($code === 'double_men' || $code === 'double_girls') {
                 $dp = (int)$doublePartner['id'];
                 bm_parent_add_entry($pdo, $tournamentId, $dp, $catId, $code);
-                bm_parent_add_team($pdo, $tournamentId, $catId, $code, [$pid, $dp], [$catId]);
+                $doubleTeam = bm_parent_add_team($pdo, $tournamentId, $catId, $code, [$pid, $dp], [$catId]);
             } elseif ($code === 'mix_double') {
                 $mp = (int)$mixPartner['id'];
                 $mixCat = $catId;
@@ -358,14 +362,14 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post): ar
                     }
                 }
                 bm_parent_add_entry($pdo, $tournamentId, $mp, $partnerCat, 'mix_double');
-                bm_parent_add_team($pdo, $tournamentId, $mixCat, 'mix_double', [$pid, $mp], $paired);
+                $mixTeam = bm_parent_add_team($pdo, $tournamentId, $mixCat, 'mix_double', [$pid, $mp], $paired);
             }
         }
 
         $receipt = bm_random_code(16);
         $pdo->prepare("INSERT INTO parent_submissions
-            (tournament_id, receipt_code, age_category_id, primary_player_id, double_partner_id, mix_partner_id, event_codes)
-            VALUES (?,?,?,?,?,?,?)")->execute([
+            (tournament_id, receipt_code, age_category_id, primary_player_id, double_partner_id, mix_partner_id, event_codes, single_team_id, double_team_id, mix_team_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?)")->execute([
             $tournamentId,
             $receipt,
             $catId,
@@ -373,6 +377,9 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post): ar
             $doublePartner ? (int)$doublePartner['id'] : null,
             $mixPartner ? (int)$mixPartner['id'] : null,
             implode(',', $eventCodes),
+            $singleTeam,
+            $doubleTeam,
+            $mixTeam,
         ]);
         $pdo->commit();
     } catch (Throwable $e) {
@@ -426,3 +433,156 @@ function bm_own_parent_receipt(string $publicToken): string
     bm_boot_session();
     return trim((string)($_SESSION['bm_parent_receipts'][$publicToken] ?? ''));
 }
+
+function bm_parent_load_by_id(PDO $pdo, int $id, int $tournamentId = 0): ?array
+{
+    if ($id <= 0) {
+        return null;
+    }
+    if ($tournamentId > 0) {
+        $st = $pdo->prepare('SELECT * FROM parent_submissions WHERE id=? AND tournament_id=? LIMIT 1');
+        $st->execute([$id, $tournamentId]);
+    } else {
+        $st = $pdo->prepare('SELECT * FROM parent_submissions WHERE id=? LIMIT 1');
+        $st->execute([$id]);
+    }
+    $row = $st->fetch();
+    if (!$row) {
+        return null;
+    }
+    return bm_parent_load_receipt($pdo, (string)$row['receipt_code'], (int)$row['tournament_id']);
+}
+
+function bm_parent_update_player_row(PDO $pdo, int $playerId, array $data, string $who): array
+{
+    $st = $pdo->prepare('SELECT * FROM players WHERE id=?');
+    $st->execute([$playerId]);
+    $cur = $st->fetch();
+    if (!$cur) {
+        throw new RuntimeException($who . ' was not found.');
+    }
+    $name = trim((string)($data['full_name'] ?? ''));
+    $gender = strtolower(trim((string)($data['gender'] ?? '')));
+    $bai = trim((string)($data['bai_id'] ?? ''));
+    $pba = trim((string)($data['pbi_id'] ?? ''));
+    $address = trim((string)($data['address'] ?? ''));
+    if ($name === '') {
+        throw new RuntimeException($who . ' name is required.');
+    }
+    if (!in_array($gender, ['boy', 'girl'], true)) {
+        throw new RuntimeException('Select Boy or Girl for ' . $who . '.');
+    }
+    bm_assert_unique_player_ids($pdo, $bai !== '' ? $bai : null, $pba !== '' ? $pba : null, $playerId);
+    $pdo->prepare("UPDATE players SET full_name=?, gender=?, bai_id=?, pbi_id=?, address=?, remarks=?, updated_at=datetime('now','localtime') WHERE id=?")
+        ->execute([
+            $name,
+            $gender,
+            $bai !== '' ? $bai : null,
+            $pba !== '' ? $pba : null,
+            $address !== '' ? $address : null,
+            $address !== '' ? $address : null,
+            $playerId,
+        ]);
+    $st->execute([$playerId]);
+    return $st->fetch();
+}
+
+function bm_parent_refresh_team_label(PDO $pdo, int $teamId): void
+{
+    if ($teamId <= 0) {
+        return;
+    }
+    $ms = $pdo->prepare("
+        SELECT p.full_name FROM players p
+        JOIN tournament_team_members m ON m.player_id = p.id
+        WHERE m.team_id = ?
+        ORDER BY CASE p.gender WHEN 'boy' THEN 0 ELSE 1 END, p.full_name
+    ");
+    $ms->execute([$teamId]);
+    $names = array_column($ms->fetchAll(), 'full_name');
+    if ($names) {
+        $pdo->prepare("UPDATE tournament_teams SET team_label=?, updated_at=datetime('now','localtime') WHERE id=?")
+            ->execute([implode(' / ', $names), $teamId]);
+    }
+}
+
+/**
+ * @return list<int>
+ */
+function bm_parent_submission_team_ids(PDO $pdo, array $sub): array
+{
+    $ids = [];
+    foreach (['single_team_id', 'double_team_id', 'mix_team_id'] as $col) {
+        $tid = (int)($sub[$col] ?? 0);
+        if ($tid > 0) {
+            $ids[] = $tid;
+        }
+    }
+    if ($ids) {
+        return array_values(array_unique($ids));
+    }
+    $people = array_values(array_filter([
+        (int)($sub['primary_player_id'] ?? 0),
+        (int)($sub['double_partner_id'] ?? 0),
+        (int)($sub['mix_partner_id'] ?? 0),
+    ]));
+    $events = array_values(array_filter(explode(',', (string)($sub['event_codes'] ?? ''))));
+    if (!$people || !$events) {
+        return [];
+    }
+    $inP = implode(',', array_fill(0, count($people), '?'));
+    $inE = implode(',', array_fill(0, count($events), '?'));
+    $st = $pdo->prepare("
+        SELECT t.id FROM tournament_teams t
+        WHERE t.tournament_id = ?
+          AND t.event_code IN ($inE)
+          AND NOT EXISTS (
+            SELECT 1 FROM tournament_team_members m
+            WHERE m.team_id = t.id AND m.player_id NOT IN ($inP)
+          )
+          AND EXISTS (
+            SELECT 1 FROM tournament_team_members m2
+            WHERE m2.team_id = t.id AND m2.player_id = ?
+          )
+    ");
+    $st->execute(array_merge([(int)$sub['tournament_id']], $events, $people, [(int)$sub['primary_player_id']]));
+    return array_map('intval', array_column($st->fetchAll(), 'id'));
+}
+
+function bm_parent_delete_submission(PDO $pdo, array $sub): void
+{
+    $tid = (int)$sub['tournament_id'];
+    $catId = (int)$sub['age_category_id'];
+    $events = array_values(array_filter(explode(',', (string)($sub['event_codes'] ?? ''))));
+    $people = array_values(array_filter([
+        (int)($sub['primary_player_id'] ?? 0),
+        (int)($sub['double_partner_id'] ?? 0),
+        (int)($sub['mix_partner_id'] ?? 0),
+    ]));
+    $pdo->beginTransaction();
+    try {
+        foreach (bm_parent_submission_team_ids($pdo, $sub) as $teamId) {
+            $pdo->prepare('DELETE FROM tournament_teams WHERE id=? AND tournament_id=?')->execute([$teamId, $tid]);
+        }
+        $cat = $pdo->prepare('SELECT * FROM age_categories WHERE id=?');
+        $cat->execute([$catId]);
+        $catRow = $cat->fetch() ?: ['id' => $catId];
+        $cats = bm_paired_category_ids($pdo, $catRow);
+        foreach ($people as $pid) {
+            foreach ($events as $code) {
+                $useCats = $code === 'mix_double' ? $cats : [$catId];
+                $in = implode(',', array_fill(0, count($useCats), '?'));
+                $pdo->prepare("DELETE FROM tournament_entries WHERE tournament_id=? AND player_id=? AND event_code=? AND age_category_id IN ($in)")
+                    ->execute(array_merge([$tid, $pid, $code], $useCats));
+            }
+        }
+        $pdo->prepare('DELETE FROM parent_submissions WHERE id=?')->execute([(int)$sub['id']]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+

@@ -32,51 +32,77 @@ $eventLabels = [];
 foreach ($row['events'] as $code) {
     $eventLabels[] = bm_event_label($code);
 }
+$dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
+$receiptUrl = bm_join_url($token);
+$receiptUrl = preg_replace('/join\.php\?t=/', 'join-receipt.php?t=', $receiptUrl) ?: $receiptUrl;
+$receiptUrl .= '&r=' . rawurlencode($receipt);
 
-$pageTitle = 'Your entry · ' . $tournament['name'];
+$pageTitle = 'Entry copy · ' . $tournament['name'];
 require __DIR__ . '/includes/header.php';
 
-$showPlayer = static function (array $pl): void {
-    if (!$pl) {
-        echo '<p class="empty">—</p>';
-        return;
-    }
-    echo '<div class="player-meta">';
-    echo '<div><dt>Name</dt><dd>' . bm_h((string)($pl['full_name'] ?? '')) . '</dd></div>';
-    echo '<div><dt>Gender</dt><dd>' . bm_h(bm_gender_label((string)($pl['gender'] ?? ''))) . '</dd></div>';
-    echo '<div><dt>BAI ID</dt><dd>' . bm_h(trim((string)($pl['bai_id'] ?? '')) !== '' ? (string)$pl['bai_id'] : '—') . '</dd></div>';
-    echo '<div><dt>PBA ID</dt><dd>' . bm_h(trim((string)($pl['pbi_id'] ?? '')) !== '' ? (string)$pl['pbi_id'] : '—') . '</dd></div>';
-    echo '</div>';
+$blockPlayer = static function (string $title, array $pl): void {
+    echo '<section class="letter-category">';
+    echo '<h2>' . bm_h($title) . '</h2>';
+    echo '<table class="letter-table"><tbody>';
+    echo '<tr><th>Name</th><td>' . bm_h((string)($pl['full_name'] ?? '')) . '</td></tr>';
+    echo '<tr><th>Gender</th><td>' . bm_h(bm_gender_label((string)($pl['gender'] ?? ''))) . '</td></tr>';
+    echo '<tr><th>BAI ID</th><td>' . bm_h(trim((string)($pl['bai_id'] ?? '')) !== '' ? (string)$pl['bai_id'] : '—') . '</td></tr>';
+    echo '<tr><th>PBA ID</th><td>' . bm_h(trim((string)($pl['pbi_id'] ?? '')) !== '' ? (string)$pl['pbi_id'] : '—') . '</td></tr>';
     $addr = bm_player_address($pl);
-    echo '<p><strong>Address:</strong> ' . bm_h($addr !== '' ? $addr : '—') . '</p>';
+    echo '<tr><th>Address</th><td>' . bm_h($addr !== '' ? $addr : '—') . '</td></tr>';
+    echo '</tbody></table></section>';
 };
 ?>
-<section class="page-head">
+<style>
+@media print {
+  .topbar, .no-print, .flash { display: none !important; }
+  body { background: #fff; }
+  .wrap { max-width: none; padding: 0; margin: 0; width: auto; }
+  .letter-sheet { box-shadow: none; border: none; margin: 0; padding: 12mm 14mm; }
+}
+</style>
+<section class="page-head no-print">
   <div>
     <p class="eyebrow">Your copy only</p>
-    <h1>Details sent</h1>
-    <p class="lede">This page shows the entry you saved for <strong><?= bm_h($tournament['name']) ?></strong>. Other parents cannot see this. Keep this page or this link for your records.</p>
+    <h1>Share / print PDF</h1>
+    <p class="lede">Save this as PDF and share it with the player’s parents to cross-check against the tournament list. Other parents cannot see this page.</p>
   </div>
-  <div class="page-actions no-print">
-    <button type="button" class="btn" onclick="window.print()">Print</button>
+  <div class="page-actions">
+    <button type="button" class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
+    <button type="button" class="btn" id="copy-receipt">Copy this page link</button>
     <a class="btn" href="join.php?t=<?= bm_h(urlencode($token)) ?>">Enter another age category</a>
   </div>
 </section>
 
-<section class="panel">
-  <p><strong>Age category:</strong> <?= bm_h((string)($cat['name'] ?? '')) ?></p>
-  <p><strong>Events:</strong> <?= bm_h(implode(', ', $eventLabels)) ?></p>
-  <h2>Player</h2>
-  <?php $showPlayer($p); ?>
+<article class="letter-sheet" id="receipt-sheet">
+  <p class="letter-date">Date: <?= bm_h(date('d-m-Y')) ?></p>
+  <h1 style="font-size:1.35rem;margin:0 0 0.6rem;"><?= bm_h($tournament['name']) ?></h1>
+  <p>Held at <strong><?= bm_h($tournament['held_at']) ?></strong><br>
+     Dates: <strong><?= bm_h($dateText) ?></strong></p>
+  <p>This is the entry submitted for this tournament. Please cross-check name, age category, events, BAI ID, PBA ID and address with the tournament list.</p>
+  <p><strong>Age category:</strong> <?= bm_h((string)($cat['name'] ?? '')) ?><br>
+     <strong>Events:</strong> <?= bm_h(implode(', ', $eventLabels)) ?></p>
 
-  <?php if ($row['double_partner']): ?>
-    <h2>Doubles partner</h2>
-    <?php $showPlayer($row['double_partner']); ?>
-  <?php endif; ?>
-
-  <?php if ($row['mix_partner']): ?>
-    <h2>Mix Double partner</h2>
-    <?php $showPlayer($row['mix_partner']); ?>
-  <?php endif; ?>
-</section>
+  <?php $blockPlayer('Player', $p); ?>
+  <?php if ($row['double_partner']) {
+      $blockPlayer('Doubles partner', $row['double_partner']);
+  } ?>
+  <?php if ($row['mix_partner']) {
+      $blockPlayer('Mix Double partner', $row['mix_partner']);
+  } ?>
+  <p class="muted">Private copy — not visible to other parents.</p>
+</article>
+<script>
+(function(){
+  var btn = document.getElementById('copy-receipt');
+  if (!btn) return;
+  btn.addEventListener('click', function(){
+    var t = <?= json_encode($receiptUrl) ?>;
+    function ok(){ var o = btn.textContent; btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = o; }, 1600); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(ok).catch(function(){ window.prompt('Copy this link:', t); });
+    } else { window.prompt('Copy this link:', t); }
+  });
+})();
+</script>
 <?php require __DIR__ . '/includes/footer.php'; ?>

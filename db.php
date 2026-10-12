@@ -184,6 +184,9 @@ function bm_init_schema(PDO $pdo): void
             double_partner_id INTEGER,
             mix_partner_id INTEGER,
             event_codes TEXT NOT NULL,
+            single_team_id INTEGER,
+            double_team_id INTEGER,
+            mix_team_id INTEGER,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
             FOREIGN KEY (age_category_id) REFERENCES age_categories(id) ON DELETE RESTRICT,
@@ -334,12 +337,22 @@ function bm_migrate_schema(PDO $pdo): void
             double_partner_id INTEGER,
             mix_partner_id INTEGER,
             event_codes TEXT NOT NULL,
+            single_team_id INTEGER,
+            double_team_id INTEGER,
+            mix_team_id INTEGER,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
             FOREIGN KEY (age_category_id) REFERENCES age_categories(id) ON DELETE RESTRICT,
             FOREIGN KEY (primary_player_id) REFERENCES players(id) ON DELETE CASCADE
         )
     ");
+    if (bm_table_exists($pdo, 'parent_submissions')) {
+        foreach (['single_team_id', 'double_team_id', 'mix_team_id'] as $col) {
+            if (!bm_column_exists($pdo, 'parent_submissions', $col)) {
+                $pdo->exec('ALTER TABLE parent_submissions ADD COLUMN ' . $col . ' INTEGER');
+            }
+        }
+    }
 }
 
 /** Events assigned to a player inside one tournament. */
