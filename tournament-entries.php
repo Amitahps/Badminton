@@ -217,13 +217,13 @@ require __DIR__ . '/includes/header.php';
     </label>
 
     <div id="player-meta" class="player-meta<?= $formPlayer ? '' : ' is-hidden' ?>">
-      <div><strong>Gender</strong><span id="pm-gender"><?= $formPlayer ? bm_h(bm_gender_label((string)$formPlayer['gender'])) : '—' ?></span></div>
-      <div><strong>PBA ID</strong><span id="pm-pba"><?= $formPlayer && trim((string)($formPlayer['pbi_id'] ?? '')) !== '' ? bm_h((string)$formPlayer['pbi_id']) : '—' ?></span></div>
-      <div><strong>BAI ID</strong><span id="pm-bai"><?= $formPlayer && trim((string)($formPlayer['bai_id'] ?? '')) !== '' ? bm_h((string)$formPlayer['bai_id']) : '—' ?></span></div>
-      <div><strong>Date of birth</strong><span id="pm-dob"><?= $formPlayer && trim((string)($formPlayer['dob'] ?? '')) !== '' ? bm_h(bm_fmt_date((string)$formPlayer['dob'])) : '—' ?></span></div>
+      <div><dt>Gender</dt><dd id="pm-gender"><?= $formPlayer ? bm_h(bm_gender_label((string)$formPlayer['gender'])) : '—' ?></dd></div>
+      <div><dt>PBA ID</dt><dd id="pm-pba"><?= $formPlayer && trim((string)($formPlayer['pbi_id'] ?? '')) !== '' ? bm_h((string)$formPlayer['pbi_id']) : '—' ?></dd></div>
+      <div><dt>BAI ID</dt><dd id="pm-bai"><?= $formPlayer && trim((string)($formPlayer['bai_id'] ?? '')) !== '' ? bm_h((string)$formPlayer['bai_id']) : '—' ?></dd></div>
+      <div><dt>Date of birth</dt><dd id="pm-dob"><?= $formPlayer && trim((string)($formPlayer['dob'] ?? '')) !== '' ? bm_h(bm_fmt_date((string)$formPlayer['dob'])) : '—' ?></dd></div>
     </div>
 
-    <div id="cat-list">
+    <div id="cat-list" class="cat-list">
       <p class="hint" id="cat-hint"<?= $formPlayer ? ' hidden' : '' ?>>Select a player first. Age categories matching that gender will appear; tick a category to choose its events.</p>
       <?php foreach ($categories as $c):
           $cid = (int)$c['id'];
@@ -234,19 +234,18 @@ require __DIR__ . '/includes/header.php';
           $hideCat = $fg === '' || ($fg === 'boy' && $sc === 'girls') || ($fg === 'girl' && $sc === 'boys');
       ?>
         <div class="cat-block cat-opt<?= $open ? ' is-open' : '' ?>" data-scope="<?= bm_h($sc) ?>" data-id="<?= $cid ?>"<?= $hideCat ? ' style="display:none"' : '' ?>>
-          <label class="cat-toggle">
-            <input type="checkbox" class="cat-pick" name="category_ids[]" value="<?= $cid ?>" <?= $open ? 'checked' : '' ?>>
-            <?= bm_h($c['name']) ?>
-            <span class="muted"> (<?= bm_h(bm_gender_scope_label($sc)) ?>)</span>
-          </label>
+          <div class="cat-row">
+            <input type="checkbox" class="cat-pick" id="cat-<?= $cid ?>" name="category_ids[]" value="<?= $cid ?>" <?= $open ? 'checked' : '' ?>>
+            <label class="cat-name" for="cat-<?= $cid ?>"><?= bm_h($c['name']) ?> <span class="muted">(<?= bm_h(bm_gender_scope_label($sc)) ?>)</span></label>
+          </div>
           <div class="cat-events">
             <?php foreach ($allowed as $code => $def): ?>
-              <label>
-                <input type="checkbox" class="event-pick" name="events[<?= $cid ?>][]" value="<?= bm_h($code) ?>"
+              <div class="event-row">
+                <input type="checkbox" class="event-pick" id="ev-<?= $cid ?>-<?= bm_h($code) ?>" name="events[<?= $cid ?>][]" value="<?= bm_h($code) ?>"
                   <?= in_array($code, $selectedMap[$cid] ?? [], true) ? 'checked' : '' ?>
                   <?= $open ? '' : 'disabled' ?>>
-                <?= bm_h($def['label']) ?>
-              </label>
+                <label for="ev-<?= $cid ?>-<?= bm_h($code) ?>"><?= bm_h($def['label']) ?></label>
+              </div>
             <?php endforeach; ?>
           </div>
         </div>
