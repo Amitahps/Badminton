@@ -344,4 +344,56 @@ function bm_redirect(string $url): void
     exit;
 }
 
+/** Extra columns admin may tick for the letter / Excel. Name is always shown. */
+function bm_letter_field_defs(): array
+{
+    return [
+        'gender' => 'Gender',
+        'bai' => 'BAI ID',
+        'pba' => 'PBA ID',
+        'aadhaar' => 'Aadhaar',
+        'dob' => 'Date of birth',
+        'address' => 'Address',
+    ];
+}
+
+/** @return list<string> */
+function bm_letter_fields_enabled(?string $raw): array
+{
+    if ($raw === null || trim($raw) === '') {
+        return array_keys(bm_letter_field_defs());
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return array_keys(bm_letter_field_defs());
+    }
+    $out = [];
+    foreach (array_keys(bm_letter_field_defs()) as $key) {
+        if (in_array($key, $decoded, true)) {
+            $out[] = $key;
+        }
+    }
+    return $out;
+}
+
+function bm_letter_fields_from_post(array $post): string
+{
+    $picked = $post['letter_fields'] ?? [];
+    if (!is_array($picked)) {
+        $picked = [];
+    }
+    $ok = [];
+    foreach (array_keys(bm_letter_field_defs()) as $key) {
+        if (in_array($key, $picked, true)) {
+            $ok[] = $key;
+        }
+    }
+    return json_encode($ok);
+}
+
+function bm_letter_shows(array $enabled, string $key): bool
+{
+    return in_array($key, $enabled, true);
+}
+
 require_once __DIR__ . '/parent-entry.php';

@@ -106,6 +106,28 @@ a { color: var(--court-dark); }
 .is-hidden { display: none !important; }
 .file-meta { font-weight: 400; font-size: 0.85rem; color: var(--muted); }
 .check-inline { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: 0.75rem; font-weight: 500; }
+.letter-fields {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.65rem 0.9rem 0.8rem;
+  background: #fff;
+  margin: 0;
+}
+.letter-fields legend {
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0 0.3rem;
+}
+.letter-fields label.check-inline,
+.form .letter-fields label.check-inline {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.28rem 1.05rem 0.28rem 0;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
 .player-meta {
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.65rem 1rem;
   margin: 0.15rem 0 0.35rem; padding: 0.8rem 0.95rem;

@@ -28,7 +28,6 @@ if (!$sub) {
 }
 
 $redir = 'tournament.php?id=' . (int)$tournament['id'];
-$publicToken = bm_tournament_ensure_public_token($pdo, $tournament);
 
 if (isset($_POST['delete_parent'])) {
     try {
@@ -93,7 +92,6 @@ $eventLabels = [];
 foreach ($sub['events'] as $code) {
     $eventLabels[] = bm_event_label($code);
 }
-$receiptUrl = 'join-receipt.php?t=' . rawurlencode($publicToken) . '&r=' . rawurlencode((string)$sub['receipt_code']);
 $pageTitle = 'Edit parent entry · ' . $tournament['name'];
 require __DIR__ . '/includes/header.php';
 ?>
@@ -104,7 +102,7 @@ require __DIR__ . '/includes/header.php';
     <p class="lede">Change the details sent by the parent. This updates the letter and Excel. Removing the entry takes it out of the letter. Assign-players (old method) is not affected.</p>
   </div>
   <div class="page-actions">
-    <a class="btn" href="<?= bm_h($receiptUrl) ?>" target="_blank">Open parent PDF / print copy</a>
+    <a class="btn" href="letter.php?id=<?= (int)$tournament['id'] ?>">Open letter PDF</a>
     <a class="btn" href="tournament.php?id=<?= (int)$tournament['id'] ?>">Back</a>
   </div>
 </section>

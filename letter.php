@@ -44,8 +44,9 @@ if (isset($_POST['save_letter'])) {
     if ($body === '') {
         $body = $defaultBody;
     }
-    $pdo->prepare("UPDATE tournaments SET letter_to=?, letter_sign=?, letter_date=?, letter_subject=?, letter_body=?, updated_at=datetime('now','localtime') WHERE id=?")
-        ->execute([$to, $sign, $letterDate, $subject, $body, $id]);
+    $cols = bm_letter_fields_from_post($_POST);
+    $pdo->prepare("UPDATE tournaments SET letter_to=?, letter_sign=?, letter_date=?, letter_subject=?, letter_body=?, letter_columns=?, updated_at=datetime('now','localtime') WHERE id=?")
+        ->execute([$to, $sign, $letterDate, $subject, $body, $cols, $id]);
     bm_flash('success', 'Letter text saved. You can edit again anytime before print / copy.');
     bm_redirect('letter.php?id=' . $id);
 }
@@ -70,6 +71,7 @@ $letterBody = trim((string)($tournament['letter_body'] ?? ''));
 if ($letterBody === '') {
     $letterBody = $defaultBody;
 }
+$letterFields = bm_letter_fields_enabled($tournament['letter_columns'] ?? null);
 
 // Only teams ticked for letter
 $teamRows = $pdo->prepare("
@@ -155,21 +157,36 @@ if ($fmt === 'csv') {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="participants_' . preg_replace('/[^A-Za-z0-9_-]+/', '_', $tournament['name']) . '.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['Section', 'Team No', 'Player Name', 'Gender', 'BAI ID', 'PBA ID', 'Aadhaar', 'DOB', 'Address']);
+    $head = ['Section', 'Team No', 'Player Name'];
+    foreach (bm_letter_field_defs() as $key => $label) {
+        if (bm_letter_shows($letterFields, $key)) {
+            $head[] = $label;
+        }
+    }
+    fputcsv($out, $head);
     foreach ($grouped as $block) {
         foreach ($block['teams'] as $ti => $team) {
             foreach ($team['members'] as $p) {
-                fputcsv($out, [
-                    $block['heading'],
-                    $ti + 1,
-                    $p['full_name'],
-                    bm_gender_label($p['gender']),
-                    $p['bai_id'] ?: '',
-                    $p['pbi_id'] ?: '',
-                    $p['aadhaar_no'] ?: '',
-                    $p['dob'] ? bm_fmt_date($p['dob']) : '',
-                    bm_player_address($p),
-                ]);
+                $rowOut = [$block['heading'], $ti + 1, $p['full_name']];
+                if (bm_letter_shows($letterFields, 'gender')) {
+                    $rowOut[] = bm_gender_label($p['gender']);
+                }
+                if (bm_letter_shows($letterFields, 'bai')) {
+                    $rowOut[] = $p['bai_id'] ?: '';
+                }
+                if (bm_letter_shows($letterFields, 'pba')) {
+                    $rowOut[] = $p['pbi_id'] ?: '';
+                }
+                if (bm_letter_shows($letterFields, 'aadhaar')) {
+                    $rowOut[] = $p['aadhaar_no'] ?: '';
+                }
+                if (bm_letter_shows($letterFields, 'dob')) {
+                    $rowOut[] = $p['dob'] ? bm_fmt_date($p['dob']) : '';
+                }
+                if (bm_letter_shows($letterFields, 'address')) {
+                    $rowOut[] = bm_player_address($p);
+                }
+                fputcsv($out, $rowOut);
             }
         }
     }
@@ -195,7 +212,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow">Export</p>
     <h1>Participating players list</h1>
-    <p class="lede">Showing <strong><?= $selCount ?></strong> of <?= $totalTeams ?> team(s). Edit letter text below, or change which teams are included.</p>
+    <p class="lede">Showing <strong><?= $selCount ?></strong> of <?= $totalTeams ?> team(s). This is one letter/PDF for the whole tournament — not a file per parent. Only the extra columns you tick below appear on the letter.</p>
   </div>
   <div class="page-actions">
     <a class="btn btn-primary" href="letter-select.php?tournament_id=<?= $id ?>">Select teams</a>
@@ -206,7 +223,7 @@ require __DIR__ . '/includes/header.php';
   </div>
 </section>
 
-<section class="panel narrow no-print">
+<section class="panel no-print" style="max-width:720px;">
   <div class="panel-head"><h2>Edit letter</h2></div>
   <form method="post" class="form">
     <input type="hidden" name="id" value="<?= $id ?>">
@@ -225,6 +242,15 @@ require __DIR__ . '/includes/header.php';
     <label>Sign-off (editable)
       <textarea name="letter_sign" rows="4" required><?= bm_h($letterSign) ?></textarea>
     </label>
+    <fieldset class="letter-fields">
+      <legend>Show in letter / PDF / Excel (player name is always shown)</legend>
+      <?php foreach (bm_letter_field_defs() as $key => $label): ?>
+        <label class="check-inline">
+          <input type="checkbox" name="letter_fields[]" value="<?= bm_h($key) ?>" <?= bm_letter_shows($letterFields, $key) ? 'checked' : '' ?>>
+          <?= bm_h($label) ?>
+        </label>
+      <?php endforeach; ?>
+    </fieldset>
     <div class="form-actions">
       <button type="submit" name="save_letter" value="1" class="btn btn-primary">Save letter edits</button>
     </div>
@@ -247,12 +273,11 @@ require __DIR__ . '/includes/header.php';
               <tr>
                 <th>Team</th>
                 <th>Player Name(s)</th>
-                <th>Gender</th>
-                <th>BAI ID</th>
-                <th>PBA ID</th>
-                <th>Aadhaar</th>
-                <th>DOB</th>
-                <th>Address</th>
+                <?php foreach (bm_letter_field_defs() as $key => $label): ?>
+                  <?php if (bm_letter_shows($letterFields, $key)): ?>
+                    <th><?= bm_h($label) ?></th>
+                  <?php endif; ?>
+                <?php endforeach; ?>
               </tr>
             </thead>
             <tbody>
@@ -263,12 +288,24 @@ require __DIR__ . '/includes/header.php';
                   <td rowspan="<?= count($team['members']) ?>"><?= $ti + 1 ?></td>
                 <?php endif; ?>
                 <td><?= bm_h($p['full_name']) ?></td>
-                <td><?= bm_h(bm_gender_label($p['gender'])) ?></td>
-                <td><?= bm_h($p['bai_id'] ?: '—') ?></td>
-                <td><?= bm_h($p['pbi_id'] ?: '—') ?></td>
-                <td><?= bm_h($p['aadhaar_no'] ?: '—') ?></td>
-                <td><?= bm_h(!empty($p['dob']) ? bm_fmt_date($p['dob']) : '—') ?></td>
-                <td><?= bm_h(($addr = bm_player_address($p)) !== '' ? $addr : '—') ?></td>
+                <?php if (bm_letter_shows($letterFields, 'gender')): ?>
+                  <td><?= bm_h(bm_gender_label($p['gender'])) ?></td>
+                <?php endif; ?>
+                <?php if (bm_letter_shows($letterFields, 'bai')): ?>
+                  <td><?= bm_h($p['bai_id'] ?: '—') ?></td>
+                <?php endif; ?>
+                <?php if (bm_letter_shows($letterFields, 'pba')): ?>
+                  <td><?= bm_h($p['pbi_id'] ?: '—') ?></td>
+                <?php endif; ?>
+                <?php if (bm_letter_shows($letterFields, 'aadhaar')): ?>
+                  <td><?= bm_h($p['aadhaar_no'] ?: '—') ?></td>
+                <?php endif; ?>
+                <?php if (bm_letter_shows($letterFields, 'dob')): ?>
+                  <td><?= bm_h(!empty($p['dob']) ? bm_fmt_date($p['dob']) : '—') ?></td>
+                <?php endif; ?>
+                <?php if (bm_letter_shows($letterFields, 'address')): ?>
+                  <td><?= bm_h(($addr = bm_player_address($p)) !== '' ? $addr : '—') ?></td>
+                <?php endif; ?>
               </tr>
               <?php endforeach; ?>
             <?php endforeach; ?>

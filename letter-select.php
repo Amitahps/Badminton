@@ -32,7 +32,10 @@ if (isset($_POST['save_selection']) || isset($_POST['save_and_open'])) {
             $on++;
         }
     }
-    bm_flash('success', $on . ' team(s) selected for the letter.');
+    $cols = bm_letter_fields_from_post($_POST);
+    $pdo->prepare("UPDATE tournaments SET letter_columns=?, updated_at=datetime('now','localtime') WHERE id=?")
+        ->execute([$cols, $id]);
+    bm_flash('success', $on . ' team(s) selected for the letter. Only ticked columns will appear.');
     if (isset($_POST['save_and_open'])) {
         bm_redirect('letter.php?id=' . $id);
     }
@@ -81,6 +84,8 @@ foreach ($teams as &$team) {
 }
 unset($team);
 
+$letterFields = bm_letter_fields_enabled($tournament['letter_columns'] ?? null);
+
 $byHeading = [];
 foreach ($teams as $team) {
     $h = $team['heading'];
@@ -98,7 +103,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow"><?= bm_h($tournament['name']) ?> · <?= bm_h($tournament['held_at']) ?> · <?= bm_h($dateText) ?></p>
     <h1>Select teams for letter</h1>
-    <p class="lede">Tick <strong>all</strong> or only a <strong>few</strong> teams. Only selected teams will appear in the letter / CSV export.</p>
+    <p class="lede">Tick <strong>all</strong> or only a <strong>few</strong> teams. Only selected teams will appear in the one letter / PDF / CSV. Extra columns (gender, BAI, PBA, Aadhaar, date of birth, address) appear only if you tick them.</p>
   </div>
   <div class="page-actions">
     <a class="btn" href="tournament.php?id=<?= $id ?>">Back to tournament</a>
@@ -113,7 +118,16 @@ require __DIR__ . '/includes/header.php';
 <section class="panel">
   <form method="post" id="select-form">
     <input type="hidden" name="tournament_id" value="<?= $id ?>">
-    <p class="hint" style="margin-bottom:0.75rem;">
+    <fieldset class="letter-fields">
+      <legend>Show in letter / PDF / Excel (player name is always shown)</legend>
+      <?php foreach (bm_letter_field_defs() as $key => $label): ?>
+        <label class="check-inline">
+          <input type="checkbox" name="letter_fields[]" value="<?= bm_h($key) ?>" <?= bm_letter_shows($letterFields, $key) ? 'checked' : '' ?>>
+          <?= bm_h($label) ?>
+        </label>
+      <?php endforeach; ?>
+    </fieldset>
+    <p class="hint" style="margin:0.85rem 0 0.75rem;">
       <button type="button" class="btn btn-sm" id="select-all">Select all</button>
       <button type="button" class="btn btn-sm" id="clear-all">Clear all</button>
     </p>

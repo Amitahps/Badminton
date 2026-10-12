@@ -124,6 +124,7 @@ function bm_init_schema(PDO $pdo): void
             letter_date TEXT,
             letter_subject TEXT,
             letter_body TEXT,
+            letter_columns TEXT,
             public_token TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
@@ -304,6 +305,9 @@ function bm_migrate_schema(PDO $pdo): void
         }
         if (!bm_column_exists($pdo, 'tournaments', 'letter_body')) {
             $pdo->exec('ALTER TABLE tournaments ADD COLUMN letter_body TEXT');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'letter_columns')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN letter_columns TEXT');
         }
         if (!bm_column_exists($pdo, 'tournaments', 'public_token')) {
             $pdo->exec('ALTER TABLE tournaments ADD COLUMN public_token TEXT');
