@@ -124,6 +124,7 @@ function bm_init_schema(PDO $pdo): void
             letter_date TEXT,
             letter_subject TEXT,
             letter_body TEXT,
+            public_token TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
@@ -172,6 +173,21 @@ function bm_init_schema(PDO $pdo): void
             FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
             FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
             FOREIGN KEY (age_category_id) REFERENCES age_categories(id) ON DELETE RESTRICT
+        );
+
+        CREATE TABLE IF NOT EXISTS parent_submissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tournament_id INTEGER NOT NULL,
+            receipt_code TEXT NOT NULL UNIQUE,
+            age_category_id INTEGER NOT NULL,
+            primary_player_id INTEGER NOT NULL,
+            double_partner_id INTEGER,
+            mix_partner_id INTEGER,
+            event_codes TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
+            FOREIGN KEY (age_category_id) REFERENCES age_categories(id) ON DELETE RESTRICT,
+            FOREIGN KEY (primary_player_id) REFERENCES players(id) ON DELETE CASCADE
         );
     ");
 }
@@ -286,6 +302,9 @@ function bm_migrate_schema(PDO $pdo): void
         if (!bm_column_exists($pdo, 'tournaments', 'letter_body')) {
             $pdo->exec('ALTER TABLE tournaments ADD COLUMN letter_body TEXT');
         }
+        if (!bm_column_exists($pdo, 'tournaments', 'public_token')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN public_token TEXT');
+        }
     }
 
     if (bm_table_exists($pdo, 'tournament_teams') && !bm_column_exists($pdo, 'tournament_teams', 'include_in_letter')) {
@@ -304,6 +323,23 @@ function bm_migrate_schema(PDO $pdo): void
             $pdo->exec("UPDATE players SET address = remarks WHERE (address IS NULL OR TRIM(address) = '') AND remarks IS NOT NULL AND TRIM(remarks) != ''");
         }
     }
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS parent_submissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tournament_id INTEGER NOT NULL,
+            receipt_code TEXT NOT NULL UNIQUE,
+            age_category_id INTEGER NOT NULL,
+            primary_player_id INTEGER NOT NULL,
+            double_partner_id INTEGER,
+            mix_partner_id INTEGER,
+            event_codes TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
+            FOREIGN KEY (age_category_id) REFERENCES age_categories(id) ON DELETE RESTRICT,
+            FOREIGN KEY (primary_player_id) REFERENCES players(id) ON DELETE CASCADE
+        )
+    ");
 }
 
 /** Events assigned to a player inside one tournament. */

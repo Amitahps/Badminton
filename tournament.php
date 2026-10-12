@@ -126,6 +126,19 @@ foreach ($categories as $c) {
     ];
 }
 
+$publicToken = bm_tournament_ensure_public_token($pdo, $tournament);
+$parentLink = bm_join_url($publicToken);
+$parentSubs = $pdo->prepare("
+    SELECT s.created_at, s.event_codes, c.name AS category_name, p.full_name
+    FROM parent_submissions s
+    JOIN age_categories c ON c.id = s.age_category_id
+    JOIN players p ON p.id = s.primary_player_id
+    WHERE s.tournament_id = ?
+    ORDER BY s.id DESC
+");
+$parentSubs->execute([$id]);
+$parentRows = $parentSubs->fetchAll();
+
 $dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
 $pageTitle = $tournament['name'] . ' · Badminton';
 require __DIR__ . '/includes/header.php';
@@ -142,6 +155,54 @@ require __DIR__ . '/includes/header.php';
     <a class="btn" href="tournament-form.php?id=<?= $id ?>">Edit details</a>
   </div>
 </section>
+
+<section class="panel">
+  <div class="panel-head"><h2>Parent entry link</h2></div>
+  <p class="lede">Send this link to parents. They fill one age category, then events. Doubles / Mix Double ask for a partner. Their save goes into the letter and Excel. The old assign-players method still works as before.</p>
+  <div class="share-link">
+    <input id="parent-link" type="text" readonly value="<?= bm_h($parentLink) ?>">
+    <button type="button" class="btn btn-primary" id="copy-parent-link">Copy link</button>
+  </div>
+  <?php if ($parentRows): ?>
+  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Each parent can open only their own receipt.</p>
+  <table class="table">
+    <thead><tr><th>When</th><th>Player</th><th>Age</th><th>Events</th></tr></thead>
+    <tbody>
+    <?php foreach ($parentRows as $ps): ?>
+      <tr>
+        <td><?= bm_h((string)$ps['created_at']) ?></td>
+        <td><?= bm_h((string)$ps['full_name']) ?></td>
+        <td><?= bm_h((string)$ps['category_name']) ?></td>
+        <td><?php
+          $labs = [];
+          foreach (explode(',', (string)$ps['event_codes']) as $code) {
+              $code = trim($code);
+              if ($code !== '') {
+                  $labs[] = bm_event_label($code);
+              }
+          }
+          echo bm_h(implode(', ', $labs));
+        ?></td>
+      </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+  <?php endif; ?>
+</section>
+<script>
+(function(){
+  var btn = document.getElementById('copy-parent-link');
+  var inp = document.getElementById('parent-link');
+  if (!btn || !inp) return;
+  btn.addEventListener('click', function(){
+    var t = inp.value;
+    function ok(){ var o = btn.textContent; btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = o; }, 1600); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(ok).catch(function(){ inp.select(); document.execCommand('copy'); ok(); });
+    } else { inp.select(); document.execCommand('copy'); ok(); }
+  });
+})();
+</script>
 
 <section class="stat-row">
   <div class="stat"><span><?= $entryPlayerCount ?></span><small>Players entered here</small></div>

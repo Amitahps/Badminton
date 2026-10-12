@@ -343,3 +343,5 @@ function bm_redirect(string $url): void
     header('Location: ' . $url);
     exit;
 }
+
+require_once __DIR__ . '/parent-entry.php';
