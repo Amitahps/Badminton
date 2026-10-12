@@ -330,30 +330,41 @@ function bm_tournament_has_entry(PDO $pdo, int $tournamentId, int $playerId, int
 }
 
 /**
- * Replace a player's category×event entries for one tournament.
- * Only valid events for each category gender_scope are stored.
+ * Category → event codes already saved for a player in one tournament.
+ *
+ * @return array<int, list<string>>
  */
-function bm_set_tournament_player_entries(PDO $pdo, int $tournamentId, int $playerId, array $categoryIds, array $eventCodes): void
+function bm_tournament_entry_map(PDO $pdo, int $tournamentId, int $playerId): array
+{
+    $st = $pdo->prepare('SELECT age_category_id, event_code FROM tournament_entries WHERE tournament_id=? AND player_id=? ORDER BY age_category_id, event_code');
+    $st->execute([$tournamentId, $playerId]);
+    $map = [];
+    foreach ($st->fetchAll() as $row) {
+        $map[(int)$row['age_category_id']][] = (string)$row['event_code'];
+    }
+    return $map;
+}
+
+/**
+ * Replace a player's entries for one tournament.
+ * $eventsByCategory is age_category_id => list of event codes (chosen per category).
+ *
+ * @param array<int|string, mixed> $eventsByCategory
+ */
+function bm_set_tournament_player_entries(PDO $pdo, int $tournamentId, int $playerId, array $eventsByCategory): void
 {
     $pdo->prepare('DELETE FROM tournament_entries WHERE tournament_id=? AND player_id=?')
         ->execute([$tournamentId, $playerId]);
     $defs = bm_event_defs();
     $ins = $pdo->prepare('INSERT INTO tournament_entries (tournament_id, player_id, age_category_id, event_code) VALUES (?,?,?,?)');
     $cats = [];
-    foreach ($categoryIds as $cid) {
+    foreach ($eventsByCategory as $cid => $codes) {
         $cid = (int)$cid;
-        if ($cid > 0) {
-            $cats[$cid] = true;
+        if ($cid > 0 && is_array($codes)) {
+            $cats[$cid] = $codes;
         }
     }
-    $evs = [];
-    foreach ($eventCodes as $code) {
-        $code = trim((string)$code);
-        if (isset($defs[$code])) {
-            $evs[$code] = true;
-        }
-    }
-    if (!$cats || !$evs) {
+    if (!$cats) {
         return;
     }
     $in = implode(',', array_fill(0, count($cats), '?'));
@@ -363,12 +374,16 @@ function bm_set_tournament_player_entries(PDO $pdo, int $tournamentId, int $play
     foreach ($st->fetchAll() as $row) {
         $scopeById[(int)$row['id']] = $row['gender_scope'] ?: 'open';
     }
-    foreach (array_keys($cats) as $cid) {
+    foreach ($cats as $cid => $codes) {
         $allowed = bm_events_for_gender_scope($scopeById[$cid] ?? 'open');
-        foreach (array_keys($evs) as $code) {
-            if (isset($allowed[$code])) {
-                $ins->execute([$tournamentId, $playerId, $cid, $code]);
+        $seen = [];
+        foreach ($codes as $code) {
+            $code = trim((string)$code);
+            if ($code === '' || isset($seen[$code]) || !isset($defs[$code]) || !isset($allowed[$code])) {
+                continue;
             }
+            $ins->execute([$tournamentId, $playerId, $cid, $code]);
+            $seen[$code] = true;
         }
     }
 }

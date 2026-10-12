@@ -19,7 +19,6 @@ $categories = $pdo->query('SELECT * FROM age_categories ORDER BY sort_order, nam
 $events = bm_event_defs();
 $allPlayers = $pdo->query('SELECT * FROM players ORDER BY full_name')->fetchAll();
 
-// Remove one player's entries from this tournament
 if (isset($_POST['clear_player_id'])) {
     $pid = (int)$_POST['clear_player_id'];
     bm_clear_tournament_player_entries($pdo, $tournamentId, $pid);
@@ -27,19 +26,17 @@ if (isset($_POST['clear_player_id'])) {
     bm_redirect('tournament-entries.php?tournament_id=' . $tournamentId);
 }
 
-// Save: one player → many categories × many events (this tournament only)
 if (isset($_POST['save_entry'])) {
     $pid = (int)($_POST['player_id'] ?? 0);
     $catIds = $_POST['category_ids'] ?? [];
-    $evCodes = $_POST['event_codes'] ?? [];
+    $rawEvents = $_POST['events'] ?? [];
     if (!is_array($catIds)) {
         $catIds = [];
     }
-    if (!is_array($evCodes)) {
-        $evCodes = [];
+    if (!is_array($rawEvents)) {
+        $rawEvents = [];
     }
     $catIds = array_values(array_unique(array_map('intval', $catIds)));
-    $evCodes = array_values(array_unique(array_map('strval', $evCodes)));
 
     $pst = $pdo->prepare('SELECT * FROM players WHERE id = ?');
     $pst->execute([$pid]);
@@ -51,14 +48,13 @@ if (isset($_POST['save_entry'])) {
         bm_flash('error', 'Create age categories first.');
     } elseif (!$catIds) {
         bm_flash('error', 'Select at least one age category for this tournament.');
-    } elseif (!$evCodes) {
-        bm_flash('error', 'Select at least one event for this tournament.');
     } else {
+        $catById = [];
         $validCat = [];
         foreach ($categories as $c) {
             $cid = (int)$c['id'];
+            $catById[$cid] = $c;
             $cscope = bm_category_gender_scope($c);
-            // Boy → boys/open only; girl → girls/open only
             if ($player['gender'] === 'boy' && $cscope === 'girls') {
                 continue;
             }
@@ -67,44 +63,62 @@ if (isset($_POST['save_entry'])) {
             }
             $validCat[$cid] = true;
         }
+        $eventsByCategory = [];
+        $ok = true;
+        $g = $player['gender'];
         foreach ($catIds as $cid) {
             if (empty($validCat[$cid])) {
                 bm_flash('error', 'Age category does not match this player’s gender.');
-                bm_redirect('tournament-entries.php?tournament_id=' . $tournamentId . '&player_id=' . $pid);
-            }
-        }
-        $g = $player['gender'];
-        $ok = true;
-        foreach ($evCodes as $code) {
-            if (!isset($events[$code])) {
-                bm_flash('error', 'Invalid event.');
                 $ok = false;
                 break;
             }
-            if ($code === 'double_men' && $g !== 'boy') {
-                bm_flash('error', 'Double Boys is for boys only.');
+            $codes = $rawEvents[$cid] ?? $rawEvents[(string)$cid] ?? [];
+            if (!is_array($codes)) {
+                $codes = [];
+            }
+            $codes = array_values(array_unique(array_filter(array_map('strval', $codes), static fn($x) => $x !== '')));
+            if (!$codes) {
+                $cname = (string)($catById[$cid]['name'] ?? 'this category');
+                bm_flash('error', 'Select Single, Doubles or Mix Double for ' . $cname . '.');
                 $ok = false;
                 break;
             }
-            if ($code === 'double_girls' && $g !== 'girl') {
-                bm_flash('error', 'Double Girls is for girls only.');
-                $ok = false;
-                break;
+            $allowed = bm_events_for_gender_scope(bm_category_gender_scope($catById[$cid]));
+            foreach ($codes as $code) {
+                if (!isset($events[$code]) || !isset($allowed[$code])) {
+                    bm_flash('error', 'Invalid event for ' . ($catById[$cid]['name'] ?? 'this category') . '.');
+                    $ok = false;
+                    break 2;
+                }
+                if ($code === 'double_men' && $g !== 'boy') {
+                    bm_flash('error', 'Double Boys is for boys only.');
+                    $ok = false;
+                    break 2;
+                }
+                if ($code === 'double_girls' && $g !== 'girl') {
+                    bm_flash('error', 'Double Girls is for girls only.');
+                    $ok = false;
+                    break 2;
+                }
             }
+            $eventsByCategory[$cid] = $codes;
         }
         if ($ok) {
-            bm_set_tournament_player_entries($pdo, $tournamentId, $pid, $catIds, $evCodes);
-            bm_flash('success', $player['full_name'] . ' saved for this tournament (' . count($catIds) . ' categor' . (count($catIds) === 1 ? 'y' : 'ies') . ', ' . count($evCodes) . ' event' . (count($evCodes) === 1 ? '' : 's') . ').');
+            bm_set_tournament_player_entries($pdo, $tournamentId, $pid, $eventsByCategory);
+            $tickCount = 0;
+            foreach ($eventsByCategory as $codes) {
+                $tickCount += count($codes);
+            }
+            bm_flash('success', $player['full_name'] . ' saved for this tournament (' . count($eventsByCategory) . ' categor' . (count($eventsByCategory) === 1 ? 'y' : 'ies') . ', ' . $tickCount . ' event' . ($tickCount === 1 ? '' : 's') . ').');
             bm_redirect('tournament-entries.php?tournament_id=' . $tournamentId);
         }
     }
     $editPlayerId = $pid;
 }
 
-// Load existing entries grouped by player
 $entryRows = $pdo->prepare("
     SELECT e.player_id, e.age_category_id, e.event_code,
-           p.full_name, p.gender, c.name AS category_name
+           p.full_name, p.gender, c.name AS category_name, c.sort_order
     FROM tournament_entries e
     JOIN players p ON p.id = e.player_id
     JOIN age_categories c ON c.id = e.age_category_id
@@ -113,36 +127,54 @@ $entryRows = $pdo->prepare("
 ");
 $entryRows->execute([$tournamentId]);
 $byPlayer = [];
+$savedMaps = [];
 foreach ($entryRows->fetchAll() as $r) {
     $pid = (int)$r['player_id'];
+    $cid = (int)$r['age_category_id'];
     if (!isset($byPlayer[$pid])) {
         $byPlayer[$pid] = [
             'player_id' => $pid,
             'full_name' => $r['full_name'],
             'gender' => $r['gender'],
-            'categories' => [],
+            'by_cat' => [],
+        ];
+        $savedMaps[$pid] = [];
+    }
+    if (!isset($byPlayer[$pid]['by_cat'][$cid])) {
+        $byPlayer[$pid]['by_cat'][$cid] = [
+            'name' => $r['category_name'],
             'events' => [],
-            'pairs' => [],
         ];
     }
-    $byPlayer[$pid]['categories'][(int)$r['age_category_id']] = $r['category_name'];
-    $byPlayer[$pid]['events'][$r['event_code']] = bm_event_label($r['event_code']);
-    $byPlayer[$pid]['pairs'][] = $r['category_name'] . ' · ' . bm_event_label($r['event_code']);
+    $byPlayer[$pid]['by_cat'][$cid]['events'][] = bm_event_label($r['event_code']);
+    $savedMaps[$pid][$cid][] = (string)$r['event_code'];
 }
 
-$selectedCats = [];
-$selectedEvents = [];
+$selectedMap = [];
 $formPlayerId = $editPlayerId;
-$formGender = '';
+$formPlayer = null;
 if ($editPlayerId > 0) {
-    $selectedCats = bm_tournament_entry_categories($pdo, $tournamentId, $editPlayerId);
-    $selectedEvents = bm_tournament_entry_events($pdo, $tournamentId, $editPlayerId);
+    $selectedMap = bm_tournament_entry_map($pdo, $tournamentId, $editPlayerId);
     foreach ($allPlayers as $p) {
         if ((int)$p['id'] === $editPlayerId) {
-            $formGender = strtolower(trim((string)($p['gender'] ?? '')));
+            $formPlayer = $p;
             break;
         }
     }
+}
+
+$playerJs = [];
+foreach ($allPlayers as $p) {
+    $pid = (int)$p['id'];
+    $dob = trim((string)($p['dob'] ?? ''));
+    $playerJs[$pid] = [
+        'gender' => bm_gender_label((string)($p['gender'] ?? '')),
+        'gender_code' => strtolower(trim((string)($p['gender'] ?? ''))),
+        'bai' => trim((string)($p['bai_id'] ?? '')) !== '' ? (string)$p['bai_id'] : '—',
+        'pba' => trim((string)($p['pbi_id'] ?? '')) !== '' ? (string)$p['pbi_id'] : '—',
+        'dob' => $dob !== '' ? bm_fmt_date($dob) : '—',
+        'entries' => (object)($savedMaps[$pid] ?? []),
+    ];
 }
 
 $dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
@@ -153,7 +185,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow"><?= bm_h($tournament['name']) ?> · <?= bm_h($tournament['held_at']) ?> · <?= bm_h($dateText) ?></p>
     <h1>Assign players for this tournament</h1>
-    <p class="lede">Pick a player from the one-time list, then tick <strong>one or more age categories</strong> and <strong>one or more events</strong> for <em>this tournament only</em>. Ask again for every new tournament.</p>
+    <p class="lede">Select a player, then tick an age category — Single, Doubles and Mix Double appear for that category. Tick the next category the same way. Save once at the bottom when all selections are done.</p>
   </div>
   <div class="page-actions">
     <a class="btn btn-primary" href="tournament.php?id=<?= $tournamentId ?>">Form teams next</a>
@@ -170,61 +202,56 @@ require __DIR__ . '/includes/header.php';
   <p class="empty">Add players first (name list is one-time). <a href="player-form.php">Add player</a></p>
 </section>
 <?php else: ?>
-<section class="panel narrow">
+<section class="panel">
   <form method="post" class="form" id="entry-form">
     <input type="hidden" name="tournament_id" value="<?= $tournamentId ?>">
     <label>Player
       <select name="player_id" id="player_id" required>
         <option value="">Select player</option>
         <?php foreach ($allPlayers as $p): ?>
-          <option value="<?= (int)$p['id'] ?>" data-gender="<?= bm_h(strtolower(trim((string)($p['gender'] ?? '')))) ?>"
-            <?= $formPlayerId === (int)$p['id'] ? 'selected' : '' ?>>
-            <?= bm_h($p['full_name']) ?> (<?= bm_h(bm_gender_label($p['gender'])) ?>)
+          <option value="<?= (int)$p['id'] ?>" <?= $formPlayerId === (int)$p['id'] ? 'selected' : '' ?>>
+            <?= bm_h($p['full_name']) ?>
           </option>
         <?php endforeach; ?>
       </select>
     </label>
 
-    <fieldset style="border:1px solid var(--line);border-radius:10px;padding:0.75rem 1rem;margin:0.75rem 0;">
-      <legend style="font-weight:600;padding:0 0.35rem;">Age categories (select multiple — filtered by player gender)</legend>
-      <?php
-        $visibleCatCount = 0;
-        foreach ($categories as $c):
-          $sc = bm_category_gender_scope($c);
-          // Server-side filter: boy → hide girls cats; girl → hide boys cats
-          if ($formGender === 'boy' && $sc === 'girls') {
-              continue;
-          }
-          if ($formGender === 'girl' && $sc === 'boys') {
-              continue;
-          }
-          $visibleCatCount++;
-      ?>
-        <label class="check-inline cat-opt" data-scope="<?= bm_h($sc) ?>" style="display:flex;margin:0.4rem 0;font-weight:500;">
-          <input type="checkbox" class="cat-pick" name="category_ids[]" value="<?= (int)$c['id'] ?>"
-            data-scope="<?= bm_h($sc) ?>"
-            <?= in_array((int)$c['id'], $selectedCats, true) ? 'checked' : '' ?>>
-          <?= bm_h($c['name']) ?>
-          <span class="muted"> (<?= bm_h(bm_gender_scope_label($sc)) ?>)</span>
-        </label>
-      <?php endforeach; ?>
-      <?php if ($formGender !== '' && $visibleCatCount === 0): ?>
-        <p class="empty" style="margin:0.5rem 0 0;">No <?= $formGender === 'girl' ? 'girls' : 'boys' ?> age categories found. Create one under Age Categories (set For = <?= $formGender === 'girl' ? 'Girls' : 'Boys' ?>).</p>
-      <?php elseif ($formGender === ''): ?>
-        <p class="hint" style="margin:0.35rem 0 0;">Select a player first — only matching boys or girls categories will stay visible.</p>
-      <?php endif; ?>
-    </fieldset>
+    <div id="player-meta" class="player-meta<?= $formPlayer ? '' : ' is-hidden' ?>">
+      <div><strong>Gender</strong><span id="pm-gender"><?= $formPlayer ? bm_h(bm_gender_label((string)$formPlayer['gender'])) : '—' ?></span></div>
+      <div><strong>PBA ID</strong><span id="pm-pba"><?= $formPlayer && trim((string)($formPlayer['pbi_id'] ?? '')) !== '' ? bm_h((string)$formPlayer['pbi_id']) : '—' ?></span></div>
+      <div><strong>BAI ID</strong><span id="pm-bai"><?= $formPlayer && trim((string)($formPlayer['bai_id'] ?? '')) !== '' ? bm_h((string)$formPlayer['bai_id']) : '—' ?></span></div>
+      <div><strong>Date of birth</strong><span id="pm-dob"><?= $formPlayer && trim((string)($formPlayer['dob'] ?? '')) !== '' ? bm_h(bm_fmt_date((string)$formPlayer['dob'])) : '—' ?></span></div>
+    </div>
 
-    <fieldset style="border:1px solid var(--line);border-radius:10px;padding:0.75rem 1rem;margin:0.75rem 0;">
-      <legend style="font-weight:600;padding:0 0.35rem;">Events (select multiple — filtered by category)</legend>
-      <?php foreach ($events as $code => $def): ?>
-        <label class="check-inline event-opt" data-code="<?= bm_h($code) ?>" style="display:flex;margin:0.4rem 0;font-weight:500;">
-          <input type="checkbox" name="event_codes[]" value="<?= bm_h($code) ?>"
-            <?= in_array($code, $selectedEvents, true) ? 'checked' : '' ?>>
-          <span><?= bm_h($def['label']) ?></span>
-        </label>
+    <div id="cat-list">
+      <p class="hint" id="cat-hint"<?= $formPlayer ? ' hidden' : '' ?>>Select a player first. Age categories matching that gender will appear; tick a category to choose its events.</p>
+      <?php foreach ($categories as $c):
+          $cid = (int)$c['id'];
+          $sc = bm_category_gender_scope($c);
+          $allowed = bm_events_for_gender_scope($sc);
+          $open = isset($selectedMap[$cid]);
+          $fg = strtolower(trim((string)($formPlayer['gender'] ?? '')));
+          $hideCat = $fg === '' || ($fg === 'boy' && $sc === 'girls') || ($fg === 'girl' && $sc === 'boys');
+      ?>
+        <div class="cat-block cat-opt<?= $open ? ' is-open' : '' ?>" data-scope="<?= bm_h($sc) ?>" data-id="<?= $cid ?>"<?= $hideCat ? ' style="display:none"' : '' ?>>
+          <label class="cat-toggle">
+            <input type="checkbox" class="cat-pick" name="category_ids[]" value="<?= $cid ?>" <?= $open ? 'checked' : '' ?>>
+            <?= bm_h($c['name']) ?>
+            <span class="muted"> (<?= bm_h(bm_gender_scope_label($sc)) ?>)</span>
+          </label>
+          <div class="cat-events">
+            <?php foreach ($allowed as $code => $def): ?>
+              <label>
+                <input type="checkbox" class="event-pick" name="events[<?= $cid ?>][]" value="<?= bm_h($code) ?>"
+                  <?= in_array($code, $selectedMap[$cid] ?? [], true) ? 'checked' : '' ?>
+                  <?= $open ? '' : 'disabled' ?>>
+                <?= bm_h($def['label']) ?>
+              </label>
+            <?php endforeach; ?>
+          </div>
+        </div>
       <?php endforeach; ?>
-    </fieldset>
+    </div>
 
     <div class="form-actions">
       <button type="submit" name="save_entry" value="1" class="btn btn-primary">Save for this tournament</button>
@@ -235,69 +262,83 @@ require __DIR__ . '/includes/header.php';
 <script>
 (function(){
   var sel = document.getElementById('player_id');
-  var scopeEvents = {
-    boys: {single:1, double_men:1, mix_double:1},
-    girls: {single:1, double_girls:1, mix_double:1},
-    open: {single:1, double_men:1, double_girls:1, mix_double:1}
-  };
-  function playerGender(){
-    var opt = sel.options[sel.selectedIndex];
-    return opt ? String(opt.getAttribute('data-gender') || '').trim().toLowerCase() : '';
+  var meta = document.getElementById('player-meta');
+  var hint = document.getElementById('cat-hint');
+  var players = <?= json_encode($playerJs, JSON_UNESCAPED_UNICODE) ?>;
+  function dash(v){ return v ? String(v) : '—'; }
+  function setText(id, v){
+    var el = document.getElementById(id);
+    if (el) el.textContent = dash(v);
   }
-  function syncCategories(){
-    var g = playerGender();
-    document.querySelectorAll('.cat-opt').forEach(function(lab){
-      var scope = String(lab.getAttribute('data-scope') || 'open').trim().toLowerCase();
-      var hide = (g === 'boy' && scope === 'girls') || (g === 'girl' && scope === 'boys');
-      var input = lab.querySelector('input');
-      lab.style.display = hide ? 'none' : 'flex';
-      if (hide) {
-        input.checked = false;
-        input.disabled = true;
-      } else {
-        input.disabled = false;
-      }
-    });
+  function player(){
+    var id = sel.value ? String(parseInt(sel.value, 10)) : '';
+    return id && players[id] ? players[id] : null;
   }
-  function syncEvents(){
-    var g = playerGender();
-    var cats = document.querySelectorAll('.cat-pick:checked:not(:disabled)');
-    var allowed = {};
-    if (!cats.length) {
-      if (g === 'boy') allowed = {single:1, double_men:1, mix_double:1};
-      else if (g === 'girl') allowed = {single:1, double_girls:1, mix_double:1};
-      else allowed = {single:1, double_men:1, double_girls:1, mix_double:1};
-    } else {
-      cats.forEach(function(c){
-        var map = scopeEvents[String(c.getAttribute('data-scope') || 'open').trim().toLowerCase()] || scopeEvents.open;
-        Object.keys(map).forEach(function(k){ allowed[k] = 1; });
+  function syncPlayer(){
+    var p = player();
+    if (!p) {
+      meta.classList.add('is-hidden');
+      if (hint) hint.hidden = false;
+      document.querySelectorAll('.cat-opt').forEach(function(block){
+        block.style.display = 'none';
+        var cat = block.querySelector('.cat-pick');
+        cat.checked = false;
+        cat.disabled = true;
+        block.classList.remove('is-open');
+        block.querySelectorAll('.event-pick').forEach(function(ev){
+          ev.checked = false;
+          ev.disabled = true;
+        });
       });
-    }
-    document.querySelectorAll('.event-opt').forEach(function(lab){
-      var code = lab.getAttribute('data-code');
-      var input = lab.querySelector('input');
-      var byCat = !allowed[code];
-      var byGender = (code === 'double_men' && g === 'girl') || (code === 'double_girls' && g === 'boy');
-      var disabled = byCat || byGender;
-      input.disabled = disabled;
-      if (disabled) input.checked = false;
-      lab.style.display = byCat ? 'none' : 'flex';
-      lab.style.opacity = byGender ? '0.45' : '1';
-    });
-  }
-  function syncAll(){ syncCategories(); syncEvents(); }
-  document.querySelectorAll('.cat-pick').forEach(function(c){
-    c.addEventListener('change', syncEvents);
-  });
-  sel.addEventListener('change', function(){
-    var id = sel.value;
-    if (id) {
-      location.href = 'tournament-entries.php?tournament_id=<?= (int)$tournamentId ?>&player_id=' + encodeURIComponent(id);
       return;
     }
-    syncAll();
+    meta.classList.remove('is-hidden');
+    if (hint) hint.hidden = true;
+    setText('pm-gender', p.gender);
+    setText('pm-pba', p.pba);
+    setText('pm-bai', p.bai);
+    setText('pm-dob', p.dob);
+    var g = String(p.gender_code || '').toLowerCase();
+    var saved = p.entries || {};
+    document.querySelectorAll('.cat-opt').forEach(function(block){
+      var scope = String(block.getAttribute('data-scope') || 'open').toLowerCase();
+      var hide = (g === 'boy' && scope === 'girls') || (g === 'girl' && scope === 'boys');
+      var cat = block.querySelector('.cat-pick');
+      var cid = String(block.getAttribute('data-id') || '');
+      var had = saved[cid] || saved[String(parseInt(cid, 10))] || [];
+      block.style.display = hide ? 'none' : 'block';
+      cat.disabled = hide;
+      if (hide) {
+        cat.checked = false;
+        block.classList.remove('is-open');
+        block.querySelectorAll('.event-pick').forEach(function(ev){
+          ev.checked = false;
+          ev.disabled = true;
+        });
+        return;
+      }
+      var open = Array.isArray(had) && had.length > 0;
+      cat.checked = open;
+      block.classList.toggle('is-open', open);
+      block.querySelectorAll('.event-pick').forEach(function(ev){
+        ev.disabled = !open;
+        ev.checked = open && had.indexOf(ev.value) !== -1;
+      });
+    });
+  }
+  document.querySelectorAll('.cat-pick').forEach(function(cat){
+    cat.addEventListener('change', function(){
+      var block = cat.closest('.cat-block');
+      var open = cat.checked;
+      block.classList.toggle('is-open', open);
+      block.querySelectorAll('.event-pick').forEach(function(ev){
+        ev.disabled = !open;
+        if (!open) ev.checked = false;
+      });
+    });
   });
-  syncAll();
+  sel.addEventListener('change', syncPlayer);
+  syncPlayer();
 })();
 </script>
 <?php endif; ?>
@@ -307,15 +348,18 @@ require __DIR__ . '/includes/header.php';
   <?php if ($byPlayer): ?>
   <table class="table">
     <thead>
-      <tr><th>Player</th><th>Gender</th><th>Age categories</th><th>Events</th><th></th></tr>
+      <tr><th>Player</th><th>Gender</th><th>Categories and events</th><th></th></tr>
     </thead>
     <tbody>
     <?php foreach ($byPlayer as $row): ?>
       <tr>
         <td><strong><?= bm_h($row['full_name']) ?></strong></td>
         <td><?= bm_h(bm_gender_label($row['gender'])) ?></td>
-        <td><?= bm_h(implode(', ', array_values($row['categories']))) ?></td>
-        <td><?= bm_h(implode(', ', array_values($row['events']))) ?></td>
+        <td>
+          <?php foreach ($row['by_cat'] as $cat): ?>
+            <div><?= bm_h($cat['name']) ?> — <?= bm_h(implode(', ', $cat['events'])) ?></div>
+          <?php endforeach; ?>
+        </td>
         <td class="right actions">
           <a class="btn btn-sm" href="tournament-entries.php?tournament_id=<?= $tournamentId ?>&player_id=<?= (int)$row['player_id'] ?>">Change</a>
           <form method="post" class="inline" onsubmit="return confirm('Remove this player from this tournament only?');">
