@@ -84,6 +84,7 @@ if (isset($_POST['save_parent_edit'])) {
         $utr = trim((string)($sub['payment_utr'] ?? ''));
         $shotName = (string)($sub['payment_screenshot'] ?? '');
         $shotHash = (string)($sub['payment_screenshot_hash'] ?? '');
+        $shotPhash = (string)($sub['payment_screenshot_phash'] ?? '');
         $status = (string)($sub['payment_status'] ?? 'na');
         if ($status === 'pending') {
             $newUtr = trim((string)($_POST['payment_utr'] ?? ''));
@@ -93,14 +94,14 @@ if (isset($_POST['save_parent_edit'])) {
             $hasNewShot = trim((string)($_POST['payment_screenshot_b64'] ?? '')) !== ''
                 || (isset($_FILES['payment_screenshot']) && (int)($_FILES['payment_screenshot']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
             if ($hasNewShot) {
-                [$shotName, $shotHash] = bm_ingest_payment_screenshot($_POST, $_FILES);
+                [$shotName, $shotHash, $shotPhash] = bm_ingest_payment_screenshot($_POST, $_FILES);
             }
             if ($utr !== '' || $shotHash !== '') {
-                bm_assert_unique_payment($pdo, $utr, $shotHash, (int)$sub['id']);
+                bm_assert_unique_payment($pdo, $utr, $shotHash, (int)$sub['id'], $shotPhash);
             }
         }
-        $pdo->prepare("UPDATE parent_submissions SET father_name=?, contact_mobile=?, payment_utr=?, payment_screenshot=?, payment_screenshot_hash=? WHERE id=?")
-            ->execute([$father, $mobile, $utr !== '' ? $utr : null, $shotName !== '' ? $shotName : null, $shotHash !== '' ? $shotHash : null, (int)$sub['id']]);
+        $pdo->prepare("UPDATE parent_submissions SET father_name=?, contact_mobile=?, payment_utr=?, payment_screenshot=?, payment_screenshot_hash=?, payment_screenshot_phash=? WHERE id=?")
+            ->execute([$father, $mobile, $utr !== '' ? $utr : null, $shotName !== '' ? $shotName : null, $shotHash !== '' ? $shotHash : null, $shotPhash !== '' ? $shotPhash : null, (int)$sub['id']]);
         bm_flash('success', 'Entry updated.');
         bm_redirect($mine);
     } catch (Throwable $e) {

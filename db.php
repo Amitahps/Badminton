@@ -211,6 +211,7 @@ function bm_init_schema(PDO $pdo): void
             payment_utr TEXT,
             payment_screenshot TEXT,
             payment_screenshot_hash TEXT,
+            payment_screenshot_phash TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
             FOREIGN KEY (age_category_id) REFERENCES age_categories(id) ON DELETE RESTRICT,
@@ -429,6 +430,7 @@ function bm_migrate_schema(PDO $pdo): void
             'payment_utr' => 'TEXT',
             'payment_screenshot' => 'TEXT',
             'payment_screenshot_hash' => 'TEXT',
+            'payment_screenshot_phash' => 'TEXT',
         ];
         foreach ($parentCols as $col => $decl) {
             if (!bm_column_exists($pdo, 'parent_submissions', $col)) {

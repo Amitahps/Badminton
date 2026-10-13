@@ -167,7 +167,7 @@ require __DIR__ . '/includes/header.php';
     <?php if ($isPaid): ?>
     <div id="pay-box" class="partner-box pay-box">
       <h2>Payment</h2>
-      <p class="hint">Pay the total by UPI. UTR / reference number must be digits only — no dots, commas or words. The same UTR or the same screenshot cannot be used again. Crop the photo; it is auto-sized (KB) but stays readable.</p>
+      <p class="hint">Pay the total by UPI. UTR / reference number must be digits only — no dots, commas or words, and a copy with only a small change is not accepted. The same screenshot cannot be used again, even if the UTR is visible or cropped out, or the photo is resized or taken from another phone. Crop the photo; it is auto-sized (KB) but stays readable.</p>
       <?php if (trim((string)($tournament['upi_id'] ?? '')) !== ''): ?>
         <p><strong>UPI:</strong> <?= bm_h((string)$tournament['upi_id']) ?></p>
       <?php endif; ?>

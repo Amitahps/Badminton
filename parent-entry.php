@@ -367,17 +367,18 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
     $utr = null;
     $shotName = null;
     $shotHash = null;
+    $shotPhash = null;
     if ($needPay) {
         $utr = bm_validate_utr((string)($post['payment_utr'] ?? ''));
-        [$shotName, $shotHash] = bm_ingest_payment_screenshot($post, $files);
-        bm_assert_unique_payment($pdo, $utr, $shotHash, 0);
+        [$shotName, $shotHash, $shotPhash] = bm_ingest_payment_screenshot($post, $files);
+        bm_assert_unique_payment($pdo, $utr, $shotHash, 0, (string)$shotPhash);
     }
     $parentCode = bm_parent_code_from_post_or_session((string)($tournament['public_token'] ?? ''), (string)($post['parent_code'] ?? ''));
 
     $pdo->beginTransaction();
     try {
         if ($needPay) {
-            bm_assert_unique_payment($pdo, (string)$utr, (string)$shotHash, 0);
+            bm_assert_unique_payment($pdo, (string)$utr, (string)$shotHash, 0, (string)$shotPhash);
         }
         foreach ($eventCodes as $code) {
             bm_parent_add_entry($pdo, $tournamentId, $pid, $catId, $code);
@@ -414,8 +415,8 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
 
         $receipt = bm_random_code(16);
         $pdo->prepare("INSERT INTO parent_submissions
-            (tournament_id, receipt_code, age_category_id, primary_player_id, double_partner_id, mix_partner_id, event_codes, single_team_id, double_team_id, mix_team_id, father_name, contact_mobile, parent_code, payment_status, payment_amount, payment_utr, payment_screenshot, payment_screenshot_hash)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")->execute([
+            (tournament_id, receipt_code, age_category_id, primary_player_id, double_partner_id, mix_partner_id, event_codes, single_team_id, double_team_id, mix_team_id, father_name, contact_mobile, parent_code, payment_status, payment_amount, payment_utr, payment_screenshot, payment_screenshot_hash, payment_screenshot_phash)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")->execute([
             $tournamentId,
             $receipt,
             $catId,
@@ -434,6 +435,7 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
             $utr,
             $shotName,
             $shotHash,
+            $shotPhash !== '' ? $shotPhash : null,
         ]);
         $pdo->commit();
     } catch (Throwable $e) {
@@ -512,6 +514,38 @@ function bm_validate_utr(string $raw): string
     return $utr;
 }
 
+/** True when two digit UTRs are the same payment with only a small change. */
+function bm_utr_too_similar(string $a, string $b): bool
+{
+    $a = preg_replace('/\D+/', '', $a) ?? '';
+    $b = preg_replace('/\D+/', '', $b) ?? '';
+    if ($a === '' || $b === '') {
+        return false;
+    }
+    if ($a === $b) {
+        return true;
+    }
+    $za = ltrim($a, '0');
+    $zb = ltrim($b, '0');
+    if ($za !== '' && $za === $zb) {
+        return true;
+    }
+    $la = strlen($a);
+    $lb = strlen($b);
+    $short = $la <= $lb ? $a : $b;
+    $long = $la <= $lb ? $b : $a;
+    $extra = abs($la - $lb);
+    if ($extra > 0 && $extra <= 2 && strlen($short) >= 8 && (str_starts_with($long, $short) || str_ends_with($long, $short) || str_contains($long, $short))) {
+        return true;
+    }
+    $dist = levenshtein($a, $b);
+    if ($dist < 0) {
+        return false;
+    }
+    $allow = min($la, $lb) >= 12 ? 2 : 1;
+    return $dist <= $allow;
+}
+
 function bm_upload_sha256(array $file): string
 {
     $tmp = (string)($file['tmp_name'] ?? '');
@@ -526,7 +560,7 @@ function bm_upload_sha256(array $file): string
 }
 
 /**
- * @return array{0:string,1:string} filename, sha256
+ * @return array{0:string,1:string,2:string} filename, sha256, perceptual fingerprint
  */
 function bm_ingest_payment_screenshot(array $post, array $files): array
 {
@@ -560,12 +594,13 @@ function bm_ingest_payment_screenshot(array $post, array $files): array
     }
     $bin = bm_compress_image_bytes($bin);
     $hash = hash('sha256', $bin);
+    $phash = bm_screenshot_fingerprint($bin);
     $name = 'pay_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)) . '.jpg';
     $dest = BM_UPLOAD_DIR . '/' . $name;
     if (file_put_contents($dest, $bin) === false) {
         throw new RuntimeException('Could not save the payment screenshot.');
     }
-    return [$name, $hash];
+    return [$name, $hash, $phash];
 }
 
 function bm_compress_image_bytes(string $bin): string
@@ -604,22 +639,500 @@ function bm_compress_image_bytes(string $bin): string
     return $out !== '' ? $out : $bin;
 }
 
-function bm_assert_unique_payment(PDO $pdo, string $utr, string $hash, int $exceptId = 0): void
+function bm_gd_gray_at($im, int $x, int $y): int
+{
+    $rgb = imagecolorat($im, $x, $y);
+    $r = ($rgb >> 16) & 255;
+    $g = ($rgb >> 8) & 255;
+    $b = $rgb & 255;
+    return (int)round(0.299 * $r + 0.587 * $g + 0.114 * $b);
+}
+
+function bm_gd_row_is_border($im, int $y, int $w, int $ref, int $tol): bool
+{
+    $hit = 0;
+    $step = max(1, (int)floor($w / 24));
+    $n = 0;
+    for ($x = 0; $x < $w; $x += $step) {
+        $n++;
+        if (abs(bm_gd_gray_at($im, $x, $y) - $ref) <= $tol) {
+            $hit++;
+        }
+    }
+    return $n > 0 && ($hit / $n) >= 0.88;
+}
+
+function bm_gd_col_is_border($im, int $x, int $h, int $ref, int $tol): bool
+{
+    $hit = 0;
+    $step = max(1, (int)floor($h / 24));
+    $n = 0;
+    for ($y = 0; $y < $h; $y += $step) {
+        $n++;
+        if (abs(bm_gd_gray_at($im, $x, $y) - $ref) <= $tol) {
+            $hit++;
+        }
+    }
+    return $n > 0 && ($hit / $n) >= 0.88;
+}
+
+function bm_gd_trim_borders($im)
+{
+    $w = imagesx($im);
+    $h = imagesy($im);
+    if ($w < 16 || $h < 16) {
+        return $im;
+    }
+    $ref = bm_gd_gray_at($im, 1, 1);
+    $tol = 24;
+    $top = 0;
+    $bottom = $h - 1;
+    $left = 0;
+    $right = $w - 1;
+    while ($top < (int)($h * 0.22) && bm_gd_row_is_border($im, $top, $w, $ref, $tol)) {
+        $top++;
+    }
+    while ($bottom > (int)($h * 0.78) && bm_gd_row_is_border($im, $bottom, $w, $ref, $tol)) {
+        $bottom--;
+    }
+    while ($left < (int)($w * 0.22) && bm_gd_col_is_border($im, $left, $h, $ref, $tol)) {
+        $left++;
+    }
+    while ($right > (int)($w * 0.78) && bm_gd_col_is_border($im, $right, $h, $ref, $tol)) {
+        $right--;
+    }
+    $nw = $right - $left + 1;
+    $nh = $bottom - $top + 1;
+    if ($nw < 16 || $nh < 16 || ($nw === $w && $nh === $h)) {
+        return $im;
+    }
+    $crop = imagecreatetruecolor($nw, $nh);
+    imagecopy($crop, $im, 0, 0, $left, $top, $nw, $nh);
+    imagedestroy($im);
+    return $crop;
+}
+
+function bm_gd_center_crop($im, float $ratio)
+{
+    $w = imagesx($im);
+    $h = imagesy($im);
+    $cw = max(8, (int)round($w * $ratio));
+    $ch = max(8, (int)round($h * $ratio));
+    $x = (int)max(0, floor(($w - $cw) / 2));
+    $y = (int)max(0, floor(($h - $ch) / 2));
+    $crop = imagecreatetruecolor($cw, $ch);
+    imagecopy($crop, $im, 0, 0, $x, $y, $cw, $ch);
+    return $crop;
+}
+
+function bm_bits_to_hex(string $bits): string
+{
+    $hex = '';
+    foreach (str_split($bits, 4) as $nibble) {
+        $hex .= dechex(bindec(str_pad($nibble, 4, '0')));
+    }
+    return $hex;
+}
+
+function bm_image_dhash($im, int $blocks = 8): string
+{
+    $sw = $blocks + 1;
+    $sh = $blocks;
+    $small = imagecreatetruecolor($sw, $sh);
+    imagecopyresampled($small, $im, 0, 0, 0, 0, $sw, $sh, imagesx($im), imagesy($im));
+    $bits = '';
+    for ($y = 0; $y < $sh; $y++) {
+        for ($x = 0; $x < $blocks; $x++) {
+            $bits .= bm_gd_gray_at($small, $x, $y) < bm_gd_gray_at($small, $x + 1, $y) ? '1' : '0';
+        }
+    }
+    imagedestroy($small);
+    return bm_bits_to_hex($bits);
+}
+
+function bm_image_ahash($im, int $blocks = 8): string
+{
+    $small = imagecreatetruecolor($blocks, $blocks);
+    imagecopyresampled($small, $im, 0, 0, 0, 0, $blocks, $blocks, imagesx($im), imagesy($im));
+    $vals = [];
+    $sum = 0;
+    for ($y = 0; $y < $blocks; $y++) {
+        for ($x = 0; $x < $blocks; $x++) {
+            $g = bm_gd_gray_at($small, $x, $y);
+            $vals[] = $g;
+            $sum += $g;
+        }
+    }
+    imagedestroy($small);
+    $avg = $sum / max(1, count($vals));
+    $bits = '';
+    foreach ($vals as $g) {
+        $bits .= $g >= $avg ? '1' : '0';
+    }
+    return bm_bits_to_hex($bits);
+}
+
+function bm_image_band_dhash($im, int $bands = 4): string
+{
+    $w = imagesx($im);
+    $h = imagesy($im);
+    $out = '';
+    $bh = max(8, (int)floor($h / $bands));
+    for ($i = 0; $i < $bands; $i++) {
+        $y = min($h - $bh, $i * $bh);
+        $band = imagecreatetruecolor($w, $bh);
+        imagecopy($band, $im, 0, 0, 0, $y, $w, $bh);
+        $out .= bm_image_dhash($band, 8);
+        imagedestroy($band);
+    }
+    return $out;
+}
+
+function bm_image_window_dhashes($im): string
+{
+    $specs = [
+        [0.00, 0.00, 1.00, 1.00],
+        [0.00, 0.00, 1.00, 0.84],
+        [0.00, 0.00, 1.00, 0.76],
+        [0.00, 0.00, 1.00, 0.68],
+        [0.00, 0.00, 1.00, 0.58],
+        [0.00, 0.15, 1.00, 1.00],
+        [0.00, 0.15, 1.00, 0.82],
+        [0.08, 0.16, 0.92, 0.80],
+        [0.00, 0.22, 1.00, 0.90],
+    ];
+    $w = imagesx($im);
+    $h = imagesy($im);
+    $out = '';
+    foreach ($specs as [$x0, $y0, $x1, $y1]) {
+        $sx = (int)max(0, floor($w * $x0));
+        $sy = (int)max(0, floor($h * $y0));
+        $sw = max(8, (int)floor($w * ($x1 - $x0)));
+        $sh = max(8, (int)floor($h * ($y1 - $y0)));
+        if ($sx + $sw > $w) {
+            $sx = max(0, $w - $sw);
+        }
+        if ($sy + $sh > $h) {
+            $sy = max(0, $h - $sh);
+        }
+        $slice = imagecreatetruecolor($sw, $sh);
+        imagecopy($slice, $im, 0, 0, $sx, $sy, $sw, $sh);
+        $out .= bm_image_dhash($slice, 8);
+        imagedestroy($slice);
+    }
+    return $out;
+}
+
+function bm_image_tile_dhashes($im, int $nx = 4, int $ny = 4): string
+{
+    $w = imagesx($im);
+    $h = imagesy($im);
+    $tw = max(8, (int)floor($w / $nx));
+    $th = max(8, (int)floor($h / $ny));
+    $out = '';
+    for ($ty = 0; $ty < $ny; $ty++) {
+        for ($tx = 0; $tx < $nx; $tx++) {
+            $x = min($w - $tw, $tx * $tw);
+            $y = min($h - $th, $ty * $th);
+            $tile = imagecreatetruecolor($tw, $th);
+            imagecopy($tile, $im, 0, 0, $x, $y, $tw, $th);
+            $out .= bm_image_dhash($tile, 8);
+            imagedestroy($tile);
+        }
+    }
+    return $out;
+}
+
+function bm_screenshot_fingerprint(string $bin): string
+{
+    if (!function_exists('imagecreatefromstring')) {
+        return '';
+    }
+    $im = @imagecreatefromstring($bin);
+    if (!$im) {
+        return '';
+    }
+    imagefilter($im, IMG_FILTER_GRAYSCALE);
+    $im = bm_gd_trim_borders($im);
+    $center = bm_gd_center_crop($im, 0.72);
+    $inner = bm_gd_center_crop($im, 0.86);
+    $fp = [
+        'd' => bm_image_dhash($im),
+        'c' => bm_image_dhash($center),
+        'm' => bm_image_dhash($inner),
+        'a' => bm_image_ahash($im),
+        'b' => bm_image_band_dhash($im, 4),
+        'w' => bm_image_window_dhashes($im),
+        't' => bm_image_tile_dhashes($im),
+        'u' => implode(',', bm_ocr_digit_strings($bin)),
+    ];
+    imagedestroy($center);
+    imagedestroy($inner);
+    imagedestroy($im);
+    $json = json_encode($fp);
+    return is_string($json) ? $json : '';
+}
+
+/** @return list<string> */
+function bm_phash_values(string $packed): array
+{
+    $packed = trim($packed);
+    if ($packed === '') {
+        return [];
+    }
+    $dec = json_decode($packed, true);
+    if (!is_array($dec)) {
+        return [$packed];
+    }
+    $out = [];
+    foreach (['d', 'c', 'm', 'a', 'b'] as $k) {
+        $v = strtolower(preg_replace('/[^0-9a-f]/', '', (string)($dec[$k] ?? '')) ?? '');
+        if ($v !== '') {
+            $out[] = $v;
+        }
+    }
+    return $out;
+}
+
+function bm_fp_decode(string $packed): array
+{
+    $dec = json_decode(trim($packed), true);
+    return is_array($dec) ? $dec : [];
+}
+
+function bm_ocr_digit_strings(string $bin): array
+{
+    if ($bin === '' || !function_exists('exec')) {
+        return [];
+    }
+    $tess = '';
+    foreach (['/usr/bin/tesseract', '/usr/local/bin/tesseract'] as $p) {
+        if (is_executable($p)) {
+            $tess = $p;
+            break;
+        }
+    }
+    if ($tess === '') {
+        return [];
+    }
+    $prefix = tempnam(sys_get_temp_dir(), 'bmocr');
+    if ($prefix === false) {
+        return [];
+    }
+    $img = $prefix . '.jpg';
+    @unlink($prefix);
+    if (file_put_contents($img, $bin) === false) {
+        return [];
+    }
+    $cmd = escapeshellcmd($tess) . ' ' . escapeshellarg($img) . ' ' . escapeshellarg($prefix)
+        . ' -l eng --psm 6 digits';
+    @exec($cmd . ' 2>/dev/null');
+    $read = $prefix . '.txt';
+    $out = [];
+    if (is_file($read)) {
+        $text = (string)file_get_contents($read);
+        if (preg_match_all('/[0-9]{8,18}/', $text, $m)) {
+            $out = array_values(array_unique($m[0]));
+        }
+        @unlink($read);
+    }
+    @unlink($img);
+    return $out;
+}
+
+function bm_fp_utrs(string $packed): array
+{
+    $u = trim((string)(bm_fp_decode($packed)['u'] ?? ''));
+    if ($u === '') {
+        return [];
+    }
+    $out = [];
+    foreach (explode(',', $u) as $part) {
+        $d = preg_replace('/\D+/', '', $part) ?? '';
+        if (strlen($d) >= 8) {
+            $out[] = $d;
+        }
+    }
+    return $out;
+}
+
+function bm_hamming_hex(string $a, string $b): int
+{
+    $n = min(strlen($a), strlen($b));
+    if ($n === 0) {
+        return 999;
+    }
+    $d = 0;
+    for ($i = 0; $i < $n; $i++) {
+        $x = hexdec($a[$i]) ^ hexdec($b[$i]);
+        $d += substr_count(decbin($x), '1');
+    }
+    $d += (int)(abs(strlen($a) - strlen($b)) * 4);
+    return $d;
+}
+
+function bm_windows_too_similar(string $wa, string $wb): bool
+{
+    $wa = strtolower(preg_replace('/[^0-9a-f]/', '', $wa) ?? '');
+    $wb = strtolower(preg_replace('/[^0-9a-f]/', '', $wb) ?? '');
+    if (strlen($wa) < 16 || strlen($wb) < 16) {
+        return false;
+    }
+    $as = str_split($wa, 16);
+    $bs = str_split($wb, 16);
+    foreach ($as as $ha) {
+        if (strlen($ha) < 16) {
+            continue;
+        }
+        foreach ($bs as $hb) {
+            if (strlen($hb) < 16) {
+                continue;
+            }
+            if (bm_hamming_hex($ha, $hb) <= 8) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function bm_tiles_too_similar(string $ta, string $tb): bool
+{
+    $ta = strtolower(preg_replace('/[^0-9a-f]/', '', $ta) ?? '');
+    $tb = strtolower(preg_replace('/[^0-9a-f]/', '', $tb) ?? '');
+    $size = 16;
+    if (strlen($ta) < $size * 8 || strlen($tb) < $size * 8) {
+        return false;
+    }
+    $na = (int)floor(strlen($ta) / $size);
+    $nb = (int)floor(strlen($tb) / $size);
+    $n = min($na, $nb, 16);
+    $hits = 0;
+    $inner = 0;
+    $innerIdx = [5, 6, 9, 10];
+    for ($i = 0; $i < $n; $i++) {
+        $d = bm_hamming_hex(substr($ta, $i * $size, $size), substr($tb, $i * $size, $size));
+        if ($d <= 10) {
+            $hits++;
+            if (in_array($i, $innerIdx, true)) {
+                $inner++;
+            }
+        }
+    }
+    return ($hits >= 7 && $inner >= 2) || $inner >= 3;
+}
+
+function bm_screenshot_too_similar(string $fpA, string $fpB): bool
+{
+    $A = bm_phash_values($fpA);
+    $B = bm_phash_values($fpB);
+    $close = 0;
+    $best = 999;
+    foreach ($A as $ha) {
+        foreach ($B as $hb) {
+            $len = min(strlen($ha), strlen($hb));
+            if ($len < 8) {
+                continue;
+            }
+            $ha2 = substr($ha, 0, $len);
+            $hb2 = substr($hb, 0, $len);
+            $bits = $len * 4;
+            $d = bm_hamming_hex($ha2, $hb2);
+            $best = min($best, $d);
+            $limit = $bits >= 200 ? 28 : ($bits >= 64 ? 12 : 8);
+            if ($d <= $limit) {
+                $close++;
+            }
+            if ($d <= 6) {
+                return true;
+            }
+        }
+    }
+    if ($close >= 2 || $best <= 10) {
+        return true;
+    }
+    $fa = bm_fp_decode($fpA);
+    $fb = bm_fp_decode($fpB);
+    if (bm_windows_too_similar((string)($fa['w'] ?? ''), (string)($fb['w'] ?? ''))) {
+        return true;
+    }
+    if (bm_tiles_too_similar((string)($fa['t'] ?? ''), (string)($fb['t'] ?? ''))) {
+        return true;
+    }
+    foreach (bm_fp_utrs($fpA) as $ua) {
+        foreach (bm_fp_utrs($fpB) as $ub) {
+            if (bm_utr_too_similar($ua, $ub)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function bm_parent_shot_fingerprint(PDO $pdo, array $row): string
+{
+    $have = trim((string)($row['payment_screenshot_phash'] ?? ''));
+    if ($have !== '') {
+        return $have;
+    }
+    $file = basename((string)($row['payment_screenshot'] ?? ''));
+    if ($file === '' || !preg_match('/^pay_[A-Za-z0-9._-]+$/', $file)) {
+        return '';
+    }
+    $path = BM_UPLOAD_DIR . '/' . $file;
+    if (!is_file($path)) {
+        return '';
+    }
+    $bin = (string)file_get_contents($path);
+    if ($bin === '') {
+        return '';
+    }
+    $fp = bm_screenshot_fingerprint($bin);
+    if ($fp !== '' && bm_column_exists($pdo, 'parent_submissions', 'payment_screenshot_phash')) {
+        $pdo->prepare('UPDATE parent_submissions SET payment_screenshot_phash=? WHERE id=?')
+            ->execute([$fp, (int)$row['id']]);
+    }
+    return $fp;
+}
+
+function bm_assert_unique_payment(PDO $pdo, string $utr, string $hash, int $exceptId = 0, string $phash = ''): void
 {
     $utr = trim($utr);
     $hash = trim($hash);
-    if ($utr !== '') {
-        $st = $pdo->prepare("SELECT id FROM parent_submissions WHERE payment_utr = ? AND id != ? LIMIT 1");
-        $st->execute([$utr, $exceptId]);
-        if ($st->fetch()) {
-            throw new RuntimeException('This UTR / reference number was already used. Entry not saved.');
+    $phash = trim($phash);
+    $newSeen = $phash !== '' ? bm_fp_utrs($phash) : [];
+    $st = $pdo->prepare('SELECT id, payment_utr, payment_screenshot, payment_screenshot_hash, payment_screenshot_phash FROM parent_submissions WHERE id != ?');
+    $st->execute([$exceptId]);
+    foreach ($st->fetchAll() as $row) {
+        $oldUtr = trim((string)($row['payment_utr'] ?? ''));
+        if ($utr !== '' && $oldUtr !== '' && bm_utr_too_similar($utr, $oldUtr)) {
+            throw new RuntimeException('This UTR / reference number was already used, or is only a small change from one already used. Entry not saved.');
         }
-    }
-    if ($hash !== '') {
-        $st = $pdo->prepare("SELECT id FROM parent_submissions WHERE payment_screenshot_hash = ? AND id != ? LIMIT 1");
-        $st->execute([$hash, $exceptId]);
-        if ($st->fetch()) {
+        $oldHash = trim((string)($row['payment_screenshot_hash'] ?? ''));
+        if ($hash !== '' && $oldHash !== '' && hash_equals($oldHash, $hash)) {
             throw new RuntimeException('This payment screenshot was already used. Entry not saved.');
+        }
+        $oldFp = '';
+        if ($phash !== '' || $utr !== '' || $newSeen) {
+            $oldFp = bm_parent_shot_fingerprint($pdo, $row);
+        }
+        $oldSeen = $oldFp !== '' ? bm_fp_utrs($oldFp) : [];
+        if ($utr !== '') {
+            foreach ($oldSeen as $seen) {
+                if (bm_utr_too_similar($utr, $seen)) {
+                    throw new RuntimeException('This UTR / reference number already appears on a saved payment screenshot. Entry not saved.');
+                }
+            }
+        }
+        if ($oldUtr !== '') {
+            foreach ($newSeen as $seen) {
+                if (bm_utr_too_similar($oldUtr, $seen)) {
+                    throw new RuntimeException('This payment screenshot shows a UTR / reference number that was already used. Entry not saved.');
+                }
+            }
+        }
+        if ($phash !== '' && $oldFp !== '' && bm_screenshot_too_similar($phash, $oldFp)) {
+            throw new RuntimeException('This payment screenshot was already used — even if the UTR is cropped out, resized, or photographed from another phone. Entry not saved.');
         }
     }
 }
