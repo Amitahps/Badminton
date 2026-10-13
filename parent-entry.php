@@ -363,22 +363,25 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
     $amount = bm_parent_fee_total($tournament, $eventCodes);
     $needPay = bm_tournament_is_paid($tournament) && $amount > 0;
     $includeLetter = $needPay ? 0 : 1;
-    $payStatus = $needPay ? 'pending' : 'na';
+    $payStatus = $needPay ? 'review' : 'na';
     $utr = null;
-    $shotName = null;
-    $shotHash = null;
-    $shotPhash = null;
+    $payDate = null;
+    $paySender = null;
     if ($needPay) {
+        $payDate = bm_parse_date_input((string)($post['payment_date'] ?? ''));
+        if ($payDate === null) {
+            throw new RuntimeException('Date of payment is required (dd-mm-yyyy).');
+        }
+        $paySender = bm_validate_sender_name((string)($post['payment_sender'] ?? ''));
         $utr = bm_validate_utr((string)($post['payment_utr'] ?? ''));
-        [$shotName, $shotHash, $shotPhash] = bm_ingest_payment_screenshot($post, $files);
-        bm_assert_unique_payment($pdo, $utr, $shotHash, 0, (string)$shotPhash);
+        bm_assert_unique_utr($pdo, $utr, 0);
     }
     $parentCode = bm_parent_code_from_post_or_session((string)($tournament['public_token'] ?? ''), (string)($post['parent_code'] ?? ''));
 
     $pdo->beginTransaction();
     try {
         if ($needPay) {
-            bm_assert_unique_payment($pdo, (string)$utr, (string)$shotHash, 0, (string)$shotPhash);
+            bm_assert_unique_utr($pdo, (string)$utr, 0);
         }
         foreach ($eventCodes as $code) {
             bm_parent_add_entry($pdo, $tournamentId, $pid, $catId, $code);
@@ -415,8 +418,8 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
 
         $receipt = bm_random_code(16);
         $pdo->prepare("INSERT INTO parent_submissions
-            (tournament_id, receipt_code, age_category_id, primary_player_id, double_partner_id, mix_partner_id, event_codes, single_team_id, double_team_id, mix_team_id, father_name, contact_mobile, parent_code, payment_status, payment_amount, payment_utr, payment_screenshot, payment_screenshot_hash, payment_screenshot_phash)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")->execute([
+            (tournament_id, receipt_code, age_category_id, primary_player_id, double_partner_id, mix_partner_id, event_codes, single_team_id, double_team_id, mix_team_id, father_name, contact_mobile, parent_code, payment_status, payment_amount, payment_utr, payment_date, payment_sender)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")->execute([
             $tournamentId,
             $receipt,
             $catId,
@@ -433,9 +436,8 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
             $payStatus,
             $amount,
             $utr,
-            $shotName,
-            $shotHash,
-            $shotPhash !== '' ? $shotPhash : null,
+            $payDate,
+            $paySender,
         ]);
         $pdo->commit();
     } catch (Throwable $e) {
@@ -512,6 +514,56 @@ function bm_validate_utr(string $raw): string
         throw new RuntimeException('UTR / reference number must be digits only. Dots, commas, spaces or words at the start, middle or end are not accepted.');
     }
     return $utr;
+}
+
+function bm_validate_sender_name(string $raw): string
+{
+    $name = trim($raw);
+    if ($name === '' || mb_strlen($name) < 2) {
+        throw new RuntimeException('Sender name is required.');
+    }
+    return $name;
+}
+
+function bm_assert_unique_utr(PDO $pdo, string $utr, int $exceptId = 0): void
+{
+    $utr = trim($utr);
+    if ($utr === '') {
+        return;
+    }
+    $st = $pdo->prepare("SELECT id FROM parent_submissions WHERE payment_utr = ? AND id != ? AND payment_status IN ('review','pending','paid') LIMIT 1");
+    $st->execute([$utr, $exceptId]);
+    if ($st->fetch()) {
+        throw new RuntimeException('This UTR / reference number was already used, or is only a small change from one already used. Entry not saved.');
+    }
+    $st = $pdo->prepare("SELECT payment_utr FROM parent_submissions WHERE id != ? AND payment_status IN ('review','pending','paid') AND payment_utr IS NOT NULL AND TRIM(payment_utr) != ''");
+    $st->execute([$exceptId]);
+    foreach ($st->fetchAll() as $row) {
+        if (bm_utr_too_similar($utr, (string)$row['payment_utr'])) {
+            throw new RuntimeException('This UTR / reference number was already used, or is only a small change from one already used. Entry not saved.');
+        }
+    }
+}
+
+function bm_decline_reasons(): array
+{
+    return [
+        'date_mismatch' => 'Date mismatch',
+        'utr_mismatch' => 'Reference no mismatch',
+        'sender_mismatch' => 'Sender name mismatch',
+    ];
+}
+
+function bm_decline_reason_label(?string $reason): string
+{
+    $map = bm_decline_reasons();
+    $reason = (string)$reason;
+    return $map[$reason] ?? ($reason !== '' ? $reason : '—');
+}
+
+function bm_payment_on_letter(?string $status): bool
+{
+    return in_array((string)$status, ['paid', 'pending'], true);
 }
 
 /** True when two digit UTRs are the same payment with only a small change. */
@@ -1189,6 +1241,19 @@ function bm_own_parent_code(string $publicToken): string
 }
 
 /** @return list<array<string,mixed>> */
+function bm_parent_declined_for_code(PDO $pdo, int $tournamentId, string $parentCode): array
+{
+    $all = bm_parent_submissions_for_code($pdo, $tournamentId, $parentCode);
+    $out = [];
+    foreach ($all as $row) {
+        if ((string)($row['payment_status'] ?? '') === 'declined') {
+            $out[] = $row;
+        }
+    }
+    return $out;
+}
+
+/** @return list<array<string,mixed>> */
 function bm_parent_submissions_for_code(PDO $pdo, int $tournamentId, string $parentCode): array
 {
     $parentCode = trim($parentCode);
@@ -1216,13 +1281,47 @@ function bm_parent_owns_receipt(PDO $pdo, array $tournament, string $receipt, st
     return hash_equals(trim((string)($row['parent_code'] ?? '')), trim($parentCode));
 }
 
+function bm_parent_set_letter_flag(PDO $pdo, array $sub, bool $on): void
+{
+    foreach (bm_parent_submission_team_ids($pdo, $sub) as $teamId) {
+        $pdo->prepare("UPDATE tournament_teams SET include_in_letter=?, updated_at=datetime('now','localtime') WHERE id=?")
+            ->execute([$on ? 1 : 0, $teamId]);
+    }
+}
+
 function bm_parent_confirm_paid(PDO $pdo, array $sub): void
 {
-    $pdo->prepare("UPDATE parent_submissions SET payment_status='paid' WHERE id=?")->execute([(int)$sub['id']]);
-    foreach (bm_parent_submission_team_ids($pdo, $sub) as $teamId) {
-        $pdo->prepare("UPDATE tournament_teams SET include_in_letter=1, updated_at=datetime('now','localtime') WHERE id=?")
-            ->execute([$teamId]);
+    $pdo->prepare("UPDATE parent_submissions SET payment_status='paid', decline_reason=NULL WHERE id=?")->execute([(int)$sub['id']]);
+    bm_parent_set_letter_flag($pdo, $sub, true);
+}
+
+function bm_parent_accept_pending_cash(PDO $pdo, array $sub): void
+{
+    $pdo->prepare("UPDATE parent_submissions SET payment_status='pending', decline_reason=NULL WHERE id=?")->execute([(int)$sub['id']]);
+    bm_parent_set_letter_flag($pdo, $sub, true);
+}
+
+function bm_parent_decline_payment(PDO $pdo, array $sub, string $reason): void
+{
+    if (!isset(bm_decline_reasons()[$reason])) {
+        throw new RuntimeException('Choose date mismatch, reference no mismatch or sender name mismatch.');
     }
+    $pdo->prepare("UPDATE parent_submissions SET payment_status='declined', decline_reason=? WHERE id=?")->execute([$reason, (int)$sub['id']]);
+    bm_parent_set_letter_flag($pdo, $sub, false);
+}
+
+function bm_parent_mark_cash_received(PDO $pdo, array $sub): void
+{
+    $pdo->prepare("UPDATE parent_submissions SET payment_status='paid', decline_reason=NULL WHERE id=?")->execute([(int)$sub['id']]);
+    bm_parent_set_letter_flag($pdo, $sub, true);
+}
+
+function bm_parent_resubmit_payment(PDO $pdo, array $sub, string $dateYmd, string $utr, string $sender): void
+{
+    bm_assert_unique_utr($pdo, $utr, (int)$sub['id']);
+    $pdo->prepare("UPDATE parent_submissions SET payment_status='review', decline_reason=NULL, payment_date=?, payment_utr=?, payment_sender=? WHERE id=?")
+        ->execute([$dateYmd, $utr, $sender, (int)$sub['id']]);
+    bm_parent_set_letter_flag($pdo, $sub, false);
 }
 
 /**
@@ -1244,13 +1343,28 @@ function bm_tournament_parent_meta_by_player(PDO $pdo, int $tournamentId): array
     return $map;
 }
 
+function bm_letter_payment_cell(array $meta): string
+{
+    if ((string)($meta['payment_status'] ?? '') === 'pending') {
+        return 'Pending';
+    }
+    return trim((string)($meta['payment_utr'] ?? ''));
+}
+
 function bm_parent_payment_label(?string $status, int $amount): string
 {
+    $rupee = $amount > 0 ? (' ₹' . $amount) : '';
+    if ($status === 'review') {
+        return 'Awaiting check' . $rupee;
+    }
+    if ($status === 'declined') {
+        return 'Declined' . $rupee;
+    }
     if ($status === 'pending') {
-        return 'Pending ₹' . $amount;
+        return 'Pending' . $rupee;
     }
     if ($status === 'paid') {
-        return 'Paid ₹' . $amount;
+        return 'Paid' . $rupee;
     }
     return $amount > 0 ? ('₹' . $amount) : 'Free / no fee';
 }

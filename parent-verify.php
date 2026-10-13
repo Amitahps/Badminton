@@ -40,7 +40,7 @@ if ($cid > 0) {
     $sql .= ' AND s.age_category_id = ?';
     $params[] = $cid;
 }
-if (in_array($status, ['pending', 'paid', 'na'], true)) {
+if (in_array($status, ['review', 'declined', 'pending', 'paid', 'na'], true)) {
     $sql .= ' AND s.payment_status = ?';
     $params[] = $status;
 }
@@ -127,7 +127,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow">Check</p>
     <h1>Verify parent entries</h1>
-    <p class="lede">Filter, print, or download Excel/CSV to check father name, contact, district, UTR and screenshots.</p>
+    <p class="lede">Filter, print, or download Excel/CSV to check date of payment, UTR, sender name and payment status.</p>
   </div>
   <div class="page-actions">
     <button type="button" class="btn btn-primary" onclick="window.print()">Print</button>
@@ -150,6 +150,8 @@ require __DIR__ . '/includes/header.php';
     </select>
     <select name="status">
       <option value="">All payments</option>
+      <option value="review" <?= $status === 'review' ? 'selected' : '' ?>>Awaiting check</option>
+      <option value="declined" <?= $status === 'declined' ? 'selected' : '' ?>>Declined</option>
       <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>Pending</option>
       <option value="paid" <?= $status === 'paid' ? 'selected' : '' ?>>Paid</option>
       <option value="na" <?= $status === 'na' ? 'selected' : '' ?>>Free / no fee</option>
@@ -203,8 +205,14 @@ require __DIR__ . '/includes/header.php';
         <td><?= bm_h(bm_parent_payment_label((string)$r['payment_status'], (int)$r['payment_amount'])) ?></td>
         <td>
           <?= bm_h((string)($r['payment_utr'] ?? '')) ?>
-          <?php if (!empty($r['payment_screenshot'])): ?>
-            <div class="no-print"><a href="view-file.php?f=<?= bm_h(urlencode((string)$r['payment_screenshot'])) ?>" target="_blank">Screenshot</a></div>
+          <?php if (trim((string)($r['payment_sender'] ?? '')) !== ''): ?>
+            <div class="muted"><?= bm_h((string)$r['payment_sender']) ?></div>
+          <?php endif; ?>
+          <?php if (trim((string)($r['payment_date'] ?? '')) !== ''): ?>
+            <div class="muted"><?= bm_h(bm_fmt_date((string)$r['payment_date'])) ?></div>
+          <?php endif; ?>
+          <?php if (($r['payment_status'] ?? '') === 'declined'): ?>
+            <div class="muted"><?= bm_h(bm_decline_reason_label((string)($r['decline_reason'] ?? ''))) ?></div>
           <?php endif; ?>
         </td>
         <td class="right no-print"><a class="btn btn-sm" href="parent-edit.php?id=<?= (int)$r['id'] ?>">Open</a></td>

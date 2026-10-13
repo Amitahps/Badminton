@@ -38,6 +38,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $feeDouble = max(0, (int)($post['fee_double'] ?? 0));
         $feeMix = max(0, (int)($post['fee_mix'] ?? 0));
         $upi = trim((string)($post['upi_id'] ?? ''));
+        $bankAccount = trim((string)($post['bank_account'] ?? ''));
+        $bankIfsc = strtoupper(trim((string)($post['bank_ifsc'] ?? '')));
+        $bankName = trim((string)($post['bank_name'] ?? ''));
         if ($name === '' || $heldAt === '' || !$from || !$to) {
             throw new RuntimeException('Tournament name, held at, and both dates are required (dd-mm-yyyy).');
         }
@@ -65,14 +68,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($id > 0) {
-            $pdo->prepare("UPDATE tournaments SET name=?, held_at=?, date_from=?, date_to=?, notes=?, is_paid=?, fee_single=?, fee_double=?, fee_mix=?, upi_id=?, qr_file=?, updated_at=datetime('now','localtime') WHERE id=?")
-                ->execute([$name, $heldAt, $from, $to, $notes !== '' ? $notes : null, $isPaid, $feeSingle, $feeDouble, $feeMix, $upi !== '' ? $upi : null, $qrKeep, $id]);
+            $pdo->prepare("UPDATE tournaments SET name=?, held_at=?, date_from=?, date_to=?, notes=?, is_paid=?, fee_single=?, fee_double=?, fee_mix=?, upi_id=?, qr_file=?, bank_account=?, bank_ifsc=?, bank_name=?, updated_at=datetime('now','localtime') WHERE id=?")
+                ->execute([$name, $heldAt, $from, $to, $notes !== '' ? $notes : null, $isPaid, $feeSingle, $feeDouble, $feeMix, $upi !== '' ? $upi : null, $qrKeep, $bankAccount !== '' ? $bankAccount : null, $bankIfsc !== '' ? $bankIfsc : null, $bankName !== '' ? $bankName : null, $id]);
             bm_ensure_tournament_age_groups($pdo, $id, $groups);
             bm_flash('success', 'Tournament updated.');
             bm_redirect('tournament.php?id=' . $id);
         } else {
-            $pdo->prepare('INSERT INTO tournaments (name, held_at, date_from, date_to, notes, is_paid, fee_single, fee_double, fee_mix, upi_id, qr_file) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-                ->execute([$name, $heldAt, $from, $to, $notes !== '' ? $notes : null, $isPaid, $feeSingle, $feeDouble, $feeMix, $upi !== '' ? $upi : null, $qrKeep]);
+            $pdo->prepare('INSERT INTO tournaments (name, held_at, date_from, date_to, notes, is_paid, fee_single, fee_double, fee_mix, upi_id, qr_file, bank_account, bank_ifsc, bank_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+                ->execute([$name, $heldAt, $from, $to, $notes !== '' ? $notes : null, $isPaid, $feeSingle, $feeDouble, $feeMix, $upi !== '' ? $upi : null, $qrKeep, $bankAccount !== '' ? $bankAccount : null, $bankIfsc !== '' ? $bankIfsc : null, $bankName !== '' ? $bankName : null]);
             $newId = (int)$pdo->lastInsertId();
             bm_ensure_tournament_age_groups($pdo, $newId, $groups);
             bm_flash('success', 'Tournament created. Parents will only see the age categories you added.');
@@ -140,6 +143,16 @@ require __DIR__ . '/includes/header.php';
         <?php if (!empty($row['qr_file'])): ?>
           <span class="file-meta">Current: <a href="view-file.php?f=<?= bm_h(urlencode((string)$row['qr_file'])) ?>" target="_blank">open QR</a></span>
         <?php endif; ?>
+      </label>
+      <p class="hint">Parents also see bank account details if you fill them (pay by QR/UPI or by transfer).</p>
+      <label>Bank name
+        <input type="text" name="bank_name" maxlength="120" value="<?= bm_h((string)($post['bank_name'] ?? $row['bank_name'] ?? '')) ?>">
+      </label>
+      <label>Account number
+        <input type="text" name="bank_account" maxlength="30" inputmode="numeric" value="<?= bm_h((string)($post['bank_account'] ?? $row['bank_account'] ?? '')) ?>">
+      </label>
+      <label>IFSC
+        <input type="text" name="bank_ifsc" maxlength="11" value="<?= bm_h((string)($post['bank_ifsc'] ?? $row['bank_ifsc'] ?? '')) ?>" placeholder="e.g. SBIN0001234">
       </label>
     </div>
     <label>Age categories for this tournament (one per line)

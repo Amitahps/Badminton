@@ -81,29 +81,28 @@ if (isset($_POST['save_parent_edit'])) {
         foreach (bm_parent_submission_team_ids($pdo, $sub) as $teamId) {
             bm_parent_refresh_team_label($pdo, $teamId);
         }
-        $utr = trim((string)($sub['payment_utr'] ?? ''));
-        $shotName = (string)($sub['payment_screenshot'] ?? '');
-        $shotHash = (string)($sub['payment_screenshot_hash'] ?? '');
-        $shotPhash = (string)($sub['payment_screenshot_phash'] ?? '');
         $status = (string)($sub['payment_status'] ?? 'na');
-        if ($status === 'pending') {
-            $newUtr = trim((string)($_POST['payment_utr'] ?? ''));
-            if ($newUtr !== '') {
-                $utr = bm_validate_utr($newUtr);
+        if (in_array($status, ['review', 'declined'], true)) {
+            $payDate = bm_parse_date_input((string)($_POST['payment_date'] ?? ''));
+            if ($payDate === null) {
+                throw new RuntimeException('Date of payment is required (dd-mm-yyyy).');
             }
-            $hasNewShot = trim((string)($_POST['payment_screenshot_b64'] ?? '')) !== ''
-                || (isset($_FILES['payment_screenshot']) && (int)($_FILES['payment_screenshot']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
-            if ($hasNewShot) {
-                [$shotName, $shotHash, $shotPhash] = bm_ingest_payment_screenshot($_POST, $_FILES);
-            }
-            if ($utr !== '' || $shotHash !== '') {
-                bm_assert_unique_payment($pdo, $utr, $shotHash, (int)$sub['id'], $shotPhash);
+            $sender = bm_validate_sender_name((string)($_POST['payment_sender'] ?? ''));
+            $utr = bm_validate_utr((string)($_POST['payment_utr'] ?? ''));
+            if ($status === 'declined') {
+                bm_parent_resubmit_payment($pdo, $sub, $payDate, $utr, $sender);
+            } else {
+                bm_assert_unique_utr($pdo, $utr, (int)$sub['id']);
+                $pdo->prepare("UPDATE parent_submissions SET payment_utr=?, payment_date=?, payment_sender=? WHERE id=?")
+                    ->execute([$utr, $payDate, $sender, (int)$sub['id']]);
             }
         }
-        $pdo->prepare("UPDATE parent_submissions SET father_name=?, contact_mobile=?, payment_utr=?, payment_screenshot=?, payment_screenshot_hash=?, payment_screenshot_phash=? WHERE id=?")
-            ->execute([$father, $mobile, $utr !== '' ? $utr : null, $shotName !== '' ? $shotName : null, $shotHash !== '' ? $shotHash : null, $shotPhash !== '' ? $shotPhash : null, (int)$sub['id']]);
-        bm_flash('success', 'Entry updated.');
-        bm_redirect($mine);
+        $pdo->prepare('UPDATE parent_submissions SET father_name=?, contact_mobile=? WHERE id=?')
+            ->execute([$father, $mobile, (int)$sub['id']]);
+        bm_flash('success', $status === 'declined' ? 'Corrected details sent. The organiser will check the bank statement again.' : 'Entry updated.');
+        bm_redirect($status === 'declined'
+            ? 'join-declined.php?t=' . rawurlencode($token) . '&p=' . rawurlencode($code)
+            : $mine);
     } catch (Throwable $e) {
         bm_flash('error', $e->getMessage());
         $sub = bm_parent_load_receipt($pdo, $receipt, (int)$tournament['id']) ?: $sub;
@@ -117,14 +116,27 @@ $eventLabels = [];
 foreach ($sub['events'] as $ec) {
     $eventLabels[] = bm_event_label($ec);
 }
+$payStatus = (string)($sub['payment_status'] ?? 'na');
+$declineReason = (string)($sub['decline_reason'] ?? '');
+$canFixPay = in_array($payStatus, ['review', 'declined'], true);
+$emptyDate = $payStatus === 'declined' && $declineReason === 'date_mismatch';
+$emptyUtr = $payStatus === 'declined' && $declineReason === 'utr_mismatch';
+$emptySender = $payStatus === 'declined' && $declineReason === 'sender_mismatch';
 $pageTitle = 'Edit your entry · ' . $tournament['name'];
 require __DIR__ . '/includes/header.php';
 ?>
+<p class="parent-top-links">
+  <a href="join-declined.php?t=<?= bm_h(urlencode($token)) ?>&amp;p=<?= bm_h(urlencode($code)) ?>">Declined entries</a>
+</p>
 <section class="page-head">
   <div>
     <p class="eyebrow"><?= bm_h($tournament['name']) ?></p>
-    <h1>Edit your entry</h1>
-    <p class="lede">Correct a mistake on this player. Other parents cannot see this page.</p>
+    <h1><?= $payStatus === 'declined' ? 'Correct declined entry' : 'Edit your entry' ?></h1>
+    <p class="lede"><?php if ($payStatus === 'declined'): ?>
+      <?= bm_h(bm_decline_reason_label($declineReason)) ?>. Other details are filled. Enter the correct field and submit again.
+    <?php else: ?>
+      Correct a mistake on this player. Other parents cannot see this page.
+    <?php endif; ?></p>
   </div>
   <div class="page-actions">
     <a class="btn" href="<?= bm_h($mine) ?>">Back to my entries</a>
@@ -133,7 +145,7 @@ require __DIR__ . '/includes/header.php';
 <section class="panel">
   <p><strong>Age category:</strong> <?= bm_h((string)(($sub['category']['name'] ?? ''))) ?></p>
   <p><strong>Events:</strong> <?= bm_h(implode(', ', $eventLabels)) ?></p>
-  <form method="post" class="form form-grid" enctype="multipart/form-data">
+  <form method="post" class="form form-grid">
     <input type="hidden" name="t" value="<?= bm_h($token) ?>">
     <input type="hidden" name="p" value="<?= bm_h($code) ?>">
     <input type="hidden" name="r" value="<?= bm_h($receipt) ?>">
@@ -168,37 +180,36 @@ require __DIR__ . '/includes/header.php';
     <label>Partner contact<input type="tel" name="m_contact_mobile" required maxlength="15" value="<?= bm_h((string)($m['mobile'] ?? '')) ?>"></label>
     <label class="span-2">Partner district<input type="text" name="m_district" required maxlength="120" value="<?= bm_h(bm_player_address($m)) ?>"></label>
     <?php endif; ?>
-    <?php if (($sub['payment_status'] ?? '') === 'pending'): ?>
-    <p class="hint span-2">Payment (pending)</p>
-    <label>UTR / reference number<input type="text" name="payment_utr" id="payment_utr" inputmode="numeric" maxlength="18" pattern="[0-9]{8,18}" value="<?= bm_h((string)($sub['payment_utr'] ?? '')) ?>"></label>
-    <label class="span-2">Replace screenshot
-      <input type="file" name="payment_screenshot" id="payment_screenshot" accept="image/png,image/jpeg,image/webp">
-      <input type="hidden" name="payment_screenshot_b64" id="payment_screenshot_b64">
-      <span class="file-meta" id="crop-kb"></span>
+    <?php if ($canFixPay): ?>
+    <p class="hint span-2">Payment — date, reference no / UTR, sender name</p>
+    <label>Date of payment (dd-mm-yyyy)
+      <input type="text" name="payment_date" required maxlength="10" placeholder="dd-mm-yyyy" value="<?php
+        if ($emptyDate) {
+            echo '';
+        } else {
+            $pd = trim((string)($sub['payment_date'] ?? ''));
+            echo $pd !== '' ? bm_h(bm_fmt_date($pd)) : '';
+        }
+      ?>">
     </label>
-    <div id="crop-overlay" class="crop-overlay is-hidden">
-      <div class="crop-panel">
-        <p>Drag to crop, then use this photo. It is auto-sized in KB but stays visible.</p>
-        <canvas id="crop-canvas"></canvas>
-        <div class="form-actions">
-          <button type="button" class="btn btn-primary" id="crop-use">Use this photo</button>
-          <button type="button" class="btn" id="crop-cancel">Cancel</button>
-        </div>
-      </div>
-    </div>
+    <label>Reference no / UTR
+      <input type="text" name="payment_utr" id="payment_utr" required inputmode="numeric" maxlength="18" pattern="[0-9]{8,18}" value="<?= $emptyUtr ? '' : bm_h((string)($sub['payment_utr'] ?? '')) ?>">
+    </label>
+    <label class="span-2">Sender name
+      <input type="text" name="payment_sender" required maxlength="160" value="<?= $emptySender ? '' : bm_h((string)($sub['payment_sender'] ?? '')) ?>">
+    </label>
     <?php endif; ?>
     <div class="form-actions span-2">
       <button type="submit" name="save_parent_edit" value="1" class="btn btn-primary">Save changes</button>
     </div>
   </form>
 </section>
-<?php if (($sub['payment_status'] ?? '') === 'pending'): ?>
+<?php if ($canFixPay): ?>
 <script>
 (function(){
   var utr = document.getElementById('payment_utr');
   if (utr) utr.addEventListener('input', function(){ utr.value = utr.value.replace(/[^0-9]/g, ''); });
 })();
 </script>
-<script src="assets/js/pay-shot.js"></script>
 <?php endif; ?>
 <?php require __DIR__ . '/includes/footer.php'; ?>

@@ -140,6 +140,9 @@ function bm_init_schema(PDO $pdo): void
             fee_mix INTEGER NOT NULL DEFAULT 0,
             upi_id TEXT,
             qr_file TEXT,
+            bank_account TEXT,
+            bank_ifsc TEXT,
+            bank_name TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
@@ -371,6 +374,15 @@ function bm_migrate_schema(PDO $pdo): void
         if (!bm_column_exists($pdo, 'tournaments', 'qr_file')) {
             $pdo->exec('ALTER TABLE tournaments ADD COLUMN qr_file TEXT');
         }
+        if (!bm_column_exists($pdo, 'tournaments', 'bank_account')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN bank_account TEXT');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'bank_ifsc')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN bank_ifsc TEXT');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'bank_name')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN bank_name TEXT');
+        }
     }
 
     if (bm_table_exists($pdo, 'tournament_teams') && !bm_column_exists($pdo, 'tournament_teams', 'include_in_letter')) {
@@ -431,6 +443,9 @@ function bm_migrate_schema(PDO $pdo): void
             'payment_screenshot' => 'TEXT',
             'payment_screenshot_hash' => 'TEXT',
             'payment_screenshot_phash' => 'TEXT',
+            'payment_date' => 'TEXT',
+            'payment_sender' => 'TEXT',
+            'decline_reason' => 'TEXT',
         ];
         foreach ($parentCols as $col => $decl) {
             if (!bm_column_exists($pdo, 'parent_submissions', $col)) {
@@ -438,7 +453,12 @@ function bm_migrate_schema(PDO $pdo): void
             }
         }
         try {
-            $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_parent_payment_utr ON parent_submissions(payment_utr) WHERE payment_utr IS NOT NULL AND TRIM(payment_utr) != ''");
+            $pdo->exec("UPDATE parent_submissions SET payment_status='review' WHERE payment_status='pending' AND (payment_sender IS NULL OR TRIM(payment_sender)='')");
+        } catch (Throwable $e) {
+        }
+        try {
+            $pdo->exec('DROP INDEX IF EXISTS idx_parent_payment_utr');
+            $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_parent_payment_utr ON parent_submissions(payment_utr) WHERE payment_utr IS NOT NULL AND TRIM(payment_utr) != '' AND payment_status IN ('review','pending','paid')");
             $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_parent_payment_shot ON parent_submissions(payment_screenshot_hash) WHERE payment_screenshot_hash IS NOT NULL AND TRIM(payment_screenshot_hash) != ''");
         } catch (Throwable $e) {
             // Keep going if older duplicate rows block the unique index.

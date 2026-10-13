@@ -173,6 +173,10 @@ a { color: var(--court-dark); }
 .fee-total { font-weight: 700; color: var(--court-dark); margin: 0.4rem 0 0; }
 .qr-img { max-width: 220px; height: auto; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .pay-box { display: none; }
+.parent-top-links { text-align: left; margin: 0 0 0.85rem; }
+.parent-top-links a { font-weight: 600; }
+.bank-pay { border: 1px solid var(--line); border-radius: 10px; padding: 0.65rem 0.9rem; background: #fff; margin: 0.5rem 0; }
+.bank-pay p { margin: 0.2rem 0; }
 .share-link { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 .share-link input { flex: 1; min-width: 14rem; font: inherit; padding: 0.55rem 0.7rem; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .event-pick-box, .partner-box, .form-grid > .hint { grid-column: 1 / -1; }

@@ -221,7 +221,7 @@ if ($fmt === 'csv') {
                     $rowOut[] = bm_player_contact($p, $parentMeta[(int)$p['id']] ?? []);
                 }
                 if (bm_letter_shows($letterFields, 'utr')) {
-                    $rowOut[] = (string)(($parentMeta[(int)$p['id']]['payment_utr'] ?? '') ?: '');
+                    $rowOut[] = bm_letter_payment_cell($parentMeta[(int)$p['id']] ?? []);
                 }
                 fputcsv($out, $rowOut);
             }
@@ -366,7 +366,7 @@ require __DIR__ . '/includes/header.php';
                   <td><?= bm_h(($ct = bm_player_contact($p, $parentMeta[(int)$p['id']] ?? [])) !== '' ? $ct : '—') ?></td>
                 <?php endif; ?>
                 <?php if (bm_letter_shows($letterFields, 'utr')): ?>
-                  <td><?= bm_h(trim((string)($parentMeta[(int)$p['id']]['payment_utr'] ?? '')) !== '' ? (string)$parentMeta[(int)$p['id']]['payment_utr'] : '—') ?></td>
+                  <td><?= bm_h(($pc = bm_letter_payment_cell($parentMeta[(int)$p['id']] ?? [])) !== '' ? $pc : '—') ?></td>
                 <?php endif; ?>
               </tr>
               <?php endforeach; ?>
@@ -379,6 +379,9 @@ require __DIR__ . '/includes/header.php';
     <p><em>No teams selected for this letter. Use “Select teams” to tick teams for export.</em></p>
   <?php endif; ?>
 
+  <?php if ($forParents): ?>
+  <p>Players whose names are missing from this list can open the tournament entry link, tap <strong>Declined entries</strong> (top left), and correct the mismatched payment date, reference number or sender name.</p>
+  <?php endif; ?>
   <p>Thanking You</p>
   <p class="letter-sign"><?= bm_h($letterSign) ?></p>
 </article>

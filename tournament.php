@@ -15,12 +15,42 @@ if (!$tournament) {
 
 $categories = bm_tournament_categories($pdo, $id);
 
-if (isset($_POST['confirm_paid'])) {
-    $sid = (int)($_POST['confirm_paid'] ?? 0);
+if (isset($_POST['confirm_paid']) || isset($_POST['accept_paid'])) {
+    $sid = (int)($_POST['confirm_paid'] ?? $_POST['accept_paid'] ?? 0);
     $sub = bm_parent_load_by_id($pdo, $sid, $id);
     if ($sub) {
         bm_parent_confirm_paid($pdo, $sub);
-        bm_flash('success', 'Payment confirmed. This entry is now on the letter.');
+        bm_flash('success', 'Accepted. Entry is on the tournament list.');
+    }
+    bm_redirect('tournament.php?id=' . $id);
+}
+if (isset($_POST['accept_pending'])) {
+    $sid = (int)$_POST['accept_pending'];
+    $sub = bm_parent_load_by_id($pdo, $sid, $id);
+    if ($sub) {
+        bm_parent_accept_pending_cash($pdo, $sub);
+        bm_flash('success', 'Entry accepted with payment pending.');
+    }
+    bm_redirect('tournament.php?id=' . $id);
+}
+if (isset($_POST['mark_cash'])) {
+    $sid = (int)$_POST['mark_cash'];
+    $sub = bm_parent_load_by_id($pdo, $sid, $id);
+    if ($sub) {
+        bm_parent_mark_cash_received($pdo, $sub);
+        bm_flash('success', 'Payment received. Status is now paid.');
+    }
+    bm_redirect('tournament.php?id=' . $id);
+}
+if (isset($_POST['decline_reason']) && isset($_POST['decline_id'])) {
+    $sub = bm_parent_load_by_id($pdo, (int)$_POST['decline_id'], $id);
+    if ($sub) {
+        try {
+            bm_parent_decline_payment($pdo, $sub, (string)$_POST['decline_reason']);
+            bm_flash('success', 'Declined: ' . bm_decline_reason_label((string)$_POST['decline_reason']));
+        } catch (Throwable $e) {
+            bm_flash('error', $e->getMessage());
+        }
     }
     bm_redirect('tournament.php?id=' . $id);
 }
@@ -140,7 +170,7 @@ $publicToken = bm_tournament_ensure_public_token($pdo, $tournament);
 $parentLink = bm_join_url($publicToken);
 $parentSubs = $pdo->prepare("
     SELECT s.id, s.created_at, s.event_codes, s.receipt_code, s.father_name, s.contact_mobile,
-           s.payment_status, s.payment_amount, s.payment_utr, s.payment_screenshot,
+           s.payment_status, s.payment_amount, s.payment_utr, s.payment_date, s.payment_sender, s.decline_reason,
            c.name AS category_name, p.full_name
     FROM parent_submissions s
     JOIN age_categories c ON c.id = s.age_category_id
@@ -179,7 +209,7 @@ require __DIR__ . '/includes/header.php';
     <button type="button" class="btn btn-primary" id="copy-parent-link">Copy link</button>
   </div>
   <?php if ($parentRows): ?>
-  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Edit, confirm paid, or remove. <a href="parent-verify.php?tournament_id=<?= $id ?>">Verify, print or Excel</a> with filters. Share <a href="letter.php?id=<?= $id ?>">one official letter PDF</a> or <a href="letter.php?id=<?= $id ?>&amp;for=parents">one parents &amp; coaches PDF</a> — not a file per parent. Pending paid entries stay off the letter until Confirm paid.</p>
+  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Check date, UTR and sender against the bank statement, then Accept, decline (one mismatch), or Payment pending. <a href="parent-verify.php?tournament_id=<?= $id ?>">Verify, print or Excel</a>. Share <a href="letter.php?id=<?= $id ?>">one official letter PDF</a> or <a href="letter.php?id=<?= $id ?>&amp;for=parents">one parents &amp; coaches PDF</a>. Awaiting-check and declined entries stay off the letter until Accept or Payment pending.</p>
   <table class="table">
     <thead><tr><th>When</th><th>Player</th><th>Father</th><th>Contact</th><th>Age</th><th>Events</th><th>Payment</th><th></th></tr></thead>
     <tbody>
@@ -202,18 +232,39 @@ require __DIR__ . '/includes/header.php';
         ?></td>
         <td>
           <?= bm_h(bm_parent_payment_label((string)($ps['payment_status'] ?? ''), (int)($ps['payment_amount'] ?? 0))) ?>
+          <?php if (($ps['payment_status'] ?? '') === 'declined'): ?>
+            <div class="muted"><?= bm_h(bm_decline_reason_label((string)($ps['decline_reason'] ?? ''))) ?></div>
+          <?php endif; ?>
+          <?php
+            $pd = trim((string)($ps['payment_date'] ?? ''));
+            if ($pd !== ''): ?>
+            <div class="muted">Date <?= bm_h(bm_fmt_date($pd)) ?></div>
+          <?php endif; ?>
           <?php if (trim((string)($ps['payment_utr'] ?? '')) !== ''): ?>
             <div class="muted">UTR <?= bm_h((string)$ps['payment_utr']) ?></div>
           <?php endif; ?>
-          <?php if (!empty($ps['payment_screenshot'])): ?>
-            <div><a href="view-file.php?f=<?= bm_h(urlencode((string)$ps['payment_screenshot'])) ?>" target="_blank">Screenshot</a></div>
+          <?php if (trim((string)($ps['payment_sender'] ?? '')) !== ''): ?>
+            <div class="muted">Sender <?= bm_h((string)$ps['payment_sender']) ?></div>
           <?php endif; ?>
         </td>
         <td class="right actions">
-          <a class="btn btn-sm" href="parent-edit.php?id=<?= (int)$ps['id'] ?>">Edit</a>
-          <?php if (($ps['payment_status'] ?? '') === 'pending'): ?>
+          <a class="btn btn-sm" href="parent-edit.php?id=<?= (int)$ps['id'] ?>">Open</a>
+          <?php if (in_array((string)($ps['payment_status'] ?? ''), ['review', 'declined'], true)): ?>
           <form method="post" class="inline">
-            <button type="submit" name="confirm_paid" value="<?= (int)$ps['id'] ?>" class="btn btn-sm btn-primary">Confirm paid</button>
+            <button type="submit" name="accept_paid" value="<?= (int)$ps['id'] ?>" class="btn btn-sm btn-primary">Accept</button>
+          </form>
+          <form method="post" class="inline">
+            <button type="submit" name="accept_pending" value="<?= (int)$ps['id'] ?>" class="btn btn-sm">Payment pending</button>
+          </form>
+          <?php foreach (bm_decline_reasons() as $code => $lab): ?>
+          <form method="post" class="inline">
+            <input type="hidden" name="decline_id" value="<?= (int)$ps['id'] ?>">
+            <button type="submit" name="decline_reason" value="<?= bm_h($code) ?>" class="btn btn-sm btn-danger"><?= bm_h($lab) ?></button>
+          </form>
+          <?php endforeach; ?>
+          <?php elseif (($ps['payment_status'] ?? '') === 'pending'): ?>
+          <form method="post" class="inline">
+            <button type="submit" name="mark_cash" value="<?= (int)$ps['id'] ?>" class="btn btn-sm btn-primary">Payment received</button>
           </form>
           <?php endif; ?>
           <form method="post" action="parent-edit.php" class="inline" onsubmit="return confirm('Remove this parent entry from the tournament, letter and Excel?');">

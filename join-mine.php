@@ -61,6 +61,9 @@ $blockPlayer = static function (string $title, array $pl): void {
   .letter-sheet { box-shadow: none; border: none; margin: 0; padding: 12mm 14mm; }
 }
 </style>
+<p class="parent-top-links no-print">
+  <a href="join-declined.php?t=<?= bm_h(urlencode($token)) ?>&amp;p=<?= bm_h(urlencode($code)) ?>">Declined entries</a>
+</p>
 <section class="page-head no-print">
   <div>
     <p class="eyebrow">Your entries only</p>
@@ -93,8 +96,17 @@ $blockPlayer = static function (string $title, array $pl): void {
       <h2>Entry <?= $i + 1 ?> — <?= bm_h((string)($cat['name'] ?? 'Age')) ?></h2>
       <p><strong>Events:</strong> <?= bm_h(implode(', ', $eventLabels)) ?><br>
          <strong>Payment:</strong> <?= bm_h(bm_parent_payment_label((string)($row['payment_status'] ?? ''), (int)($row['payment_amount'] ?? 0))) ?>
+         <?php if ((string)($row['payment_status'] ?? '') === 'declined'): ?>
+           · <?= bm_h(bm_decline_reason_label((string)($row['decline_reason'] ?? ''))) ?>
+         <?php endif; ?>
+         <?php if (trim((string)($row['payment_date'] ?? '')) !== ''): ?>
+           · Date <?= bm_h(bm_fmt_date((string)$row['payment_date'])) ?>
+         <?php endif; ?>
          <?php if (trim((string)($row['payment_utr'] ?? '')) !== ''): ?>
            · UTR <?= bm_h((string)$row['payment_utr']) ?>
+         <?php endif; ?>
+         <?php if (trim((string)($row['payment_sender'] ?? '')) !== ''): ?>
+           · Sender <?= bm_h((string)$row['payment_sender']) ?>
          <?php endif; ?>
       </p>
       <p class="no-print"><a class="btn btn-sm" href="join-edit.php?t=<?= bm_h(urlencode($token)) ?>&amp;p=<?= bm_h(urlencode($code)) ?>&amp;r=<?= bm_h(urlencode((string)$row['receipt_code'])) ?>">Edit this entry</a></p>

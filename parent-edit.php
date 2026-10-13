@@ -29,10 +29,40 @@ if (!$sub) {
 
 $redir = 'tournament.php?id=' . (int)$tournament['id'];
 
-if (isset($_POST['confirm_paid'])) {
+if (isset($_POST['confirm_paid']) || isset($_POST['accept_paid'])) {
     try {
         bm_parent_confirm_paid($pdo, $sub);
-        bm_flash('success', 'Payment confirmed. This entry is now on the letter.');
+        bm_flash('success', 'Accepted. Entry is on the tournament list.');
+    } catch (Throwable $e) {
+        bm_flash('error', $e->getMessage());
+    }
+    bm_redirect($redir);
+}
+
+if (isset($_POST['accept_pending'])) {
+    try {
+        bm_parent_accept_pending_cash($pdo, $sub);
+        bm_flash('success', 'Entry accepted with payment pending. Collect cash on tournament day, then mark payment received.');
+    } catch (Throwable $e) {
+        bm_flash('error', $e->getMessage());
+    }
+    bm_redirect($redir);
+}
+
+if (isset($_POST['mark_cash'])) {
+    try {
+        bm_parent_mark_cash_received($pdo, $sub);
+        bm_flash('success', 'Payment received. Status is now paid.');
+    } catch (Throwable $e) {
+        bm_flash('error', $e->getMessage());
+    }
+    bm_redirect($redir);
+}
+
+if (isset($_POST['decline_reason']) && is_string($_POST['decline_reason']) && $_POST['decline_reason'] !== '') {
+    try {
+        bm_parent_decline_payment($pdo, $sub, (string)$_POST['decline_reason']);
+        bm_flash('success', 'Declined: ' . bm_decline_reason_label((string)$_POST['decline_reason']) . '. Shown only on the decline list.');
     } catch (Throwable $e) {
         bm_flash('error', $e->getMessage());
     }
@@ -132,13 +162,39 @@ require __DIR__ . '/includes/header.php';
   </div>
 </section>
 
+<?php
+$paySt = (string)($sub['payment_status'] ?? 'na');
+$payDateShow = trim((string)($sub['payment_date'] ?? ''));
+$payDateShow = $payDateShow !== '' ? bm_fmt_date($payDateShow) : '—';
+?>
 <section class="panel">
   <p><strong>Age category:</strong> <?= bm_h((string)(($sub['category']['name'] ?? ''))) ?></p>
   <p><strong>Events:</strong> <?= bm_h(implode(', ', $eventLabels)) ?></p>
-  <p><strong>Payment:</strong> <?= bm_h(bm_parent_payment_label((string)($sub['payment_status'] ?? ''), (int)($sub['payment_amount'] ?? 0))) ?>
-    <?php if (trim((string)($sub['payment_utr'] ?? '')) !== ''): ?> · UTR <?= bm_h((string)$sub['payment_utr']) ?><?php endif; ?>
-    <?php if (!empty($sub['payment_screenshot'])): ?> · <a href="view-file.php?f=<?= bm_h(urlencode((string)$sub['payment_screenshot'])) ?>" target="_blank">Screenshot</a><?php endif; ?>
+  <p><strong>Payment:</strong> <?= bm_h(bm_parent_payment_label($paySt, (int)($sub['payment_amount'] ?? 0))) ?>
+    <?php if ($paySt === 'declined'): ?> · <?= bm_h(bm_decline_reason_label((string)($sub['decline_reason'] ?? ''))) ?><?php endif; ?>
   </p>
+  <p>Date of payment: <strong><?= bm_h($payDateShow) ?></strong><br>
+     Reference no / UTR: <strong><?= bm_h(trim((string)($sub['payment_utr'] ?? '')) !== '' ? (string)$sub['payment_utr'] : '—') ?></strong><br>
+     Sender name: <strong><?= bm_h(trim((string)($sub['payment_sender'] ?? '')) !== '' ? (string)$sub['payment_sender'] : '—') ?></strong></p>
+  <?php if (in_array($paySt, ['review', 'declined'], true)): ?>
+  <form method="post" class="form-actions" style="margin-bottom:1rem;">
+    <input type="hidden" name="id" value="<?= $id ?>">
+    <button type="submit" name="accept_paid" value="1" class="btn btn-primary">Accept (statement matches)</button>
+    <button type="submit" name="accept_pending" value="1" class="btn">Payment pending</button>
+  </form>
+  <p class="hint">If the bank statement does not match, click one mismatch and that is the decline:</p>
+  <form method="post" class="form-actions" style="margin-bottom:1rem;">
+    <input type="hidden" name="id" value="<?= $id ?>">
+    <?php foreach (bm_decline_reasons() as $code => $lab): ?>
+      <button type="submit" name="decline_reason" value="<?= bm_h($code) ?>" class="btn btn-danger"><?= bm_h($lab) ?></button>
+    <?php endforeach; ?>
+  </form>
+  <?php elseif ($paySt === 'pending'): ?>
+  <form method="post" class="form-actions" style="margin-bottom:1rem;">
+    <input type="hidden" name="id" value="<?= $id ?>">
+    <button type="submit" name="mark_cash" value="1" class="btn btn-primary">Payment received (cash)</button>
+  </form>
+  <?php endif; ?>
   <form method="post" class="form form-grid">
     <input type="hidden" name="id" value="<?= $id ?>">
     <p class="hint span-2">Player</p>
@@ -177,9 +233,6 @@ require __DIR__ . '/includes/header.php';
 
     <div class="form-actions span-2">
       <button type="submit" name="save_parent_edit" value="1" class="btn btn-primary">Save changes</button>
-      <?php if (($sub['payment_status'] ?? '') === 'pending'): ?>
-      <button type="submit" name="confirm_paid" value="1" class="btn">Confirm paid</button>
-      <?php endif; ?>
       <button type="submit" name="delete_parent" value="1" class="btn btn-danger" onclick="return confirm('Remove this parent entry from the tournament, letter and Excel?');">Remove entry</button>
     </div>
   </form>

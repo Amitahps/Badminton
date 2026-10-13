@@ -28,7 +28,7 @@ if (isset($_POST['save_parent'])) {
         $result = bm_parent_save_submission($pdo, $tournament, $_POST, $_FILES);
         bm_remember_parent_receipt($token, $result['receipt']);
         bm_remember_parent_code($token, (string)$result['parent_code']);
-        bm_flash('success', 'Saved. Open your PDF for every player you have sent. Other parents cannot see it.');
+        bm_flash('success', 'Saved. For a paid entry the organiser will check date, UTR and sender name against the bank statement before the player is on the list.');
         bm_redirect('join-mine.php?t=' . rawurlencode($token) . '&p=' . rawurlencode((string)$result['parent_code']));
     } catch (Throwable $e) {
         bm_flash('error', $e->getMessage());
@@ -58,11 +58,16 @@ $form = [
     'm_contact_mobile' => (string)($_POST['m_contact_mobile'] ?? ''),
     'm_district' => (string)($_POST['m_district'] ?? ''),
     'payment_utr' => (string)($_POST['payment_utr'] ?? ''),
+    'payment_date' => (string)($_POST['payment_date'] ?? ''),
+    'payment_sender' => (string)($_POST['payment_sender'] ?? ''),
 ];
 
 $pageTitle = $tournament['name'] . ' · Parent entry';
 require __DIR__ . '/includes/header.php';
 ?>
+<p class="parent-top-links">
+  <a href="join-declined.php?t=<?= bm_h(urlencode($token)) ?><?= $parentCode !== '' ? '&amp;p=' . bm_h(urlencode($parentCode)) : '' ?>">Declined entries</a>
+</p>
 <section class="page-head">
   <div>
     <p class="eyebrow">Parent / coach entry</p>
@@ -83,7 +88,7 @@ require __DIR__ . '/includes/header.php';
 </section>
 <?php else: ?>
 <section class="panel">
-  <form method="post" class="form form-grid" id="parent-form" enctype="multipart/form-data">
+  <form method="post" class="form form-grid" id="parent-form">
     <input type="hidden" name="t" value="<?= bm_h($token) ?>">
     <?php if ($parentCode): ?>
     <input type="hidden" name="parent_code" value="<?= bm_h($parentCode) ?>">
@@ -165,33 +170,38 @@ require __DIR__ . '/includes/header.php';
     </div>
 
     <?php if ($isPaid): ?>
-    <div id="pay-box" class="partner-box pay-box">
+    <div id="pay-box" class="partner-box pay-box form-grid">
       <h2>Payment</h2>
-      <p class="hint">Pay the total by UPI. UTR / reference number must be digits only — no dots, commas or words, and a copy with only a small change is not accepted. The same screenshot cannot be used again, even if the UTR is visible or cropped out, or the photo is resized or taken from another phone. Crop the photo; it is auto-sized (KB) but stays readable.</p>
-      <?php if (trim((string)($tournament['upi_id'] ?? '')) !== ''): ?>
-        <p><strong>UPI:</strong> <?= bm_h((string)$tournament['upi_id']) ?></p>
-      <?php endif; ?>
+      <p class="hint">Pay by QR / UPI or by bank transfer. Then fill date of payment, reference no / UTR, and sender name. No screenshot. The organiser will check the bank statement and accept or decline.</p>
       <?php if (!empty($tournament['qr_file'])): ?>
         <p><img class="qr-img" src="join-qr.php?t=<?= bm_h(urlencode($token)) ?>" alt="Payment QR"></p>
       <?php endif; ?>
-      <label>UTR / reference number
+      <?php if (trim((string)($tournament['upi_id'] ?? '')) !== ''): ?>
+        <p><strong>UPI:</strong> <?= bm_h((string)$tournament['upi_id']) ?></p>
+      <?php endif; ?>
+      <?php if (trim((string)($tournament['bank_account'] ?? '')) !== '' || trim((string)($tournament['bank_ifsc'] ?? '')) !== '' || trim((string)($tournament['bank_name'] ?? '')) !== ''): ?>
+        <div class="bank-pay">
+          <p><strong>Or pay to bank account</strong></p>
+          <?php if (trim((string)($tournament['bank_name'] ?? '')) !== ''): ?>
+            <p>Bank: <?= bm_h((string)$tournament['bank_name']) ?></p>
+          <?php endif; ?>
+          <?php if (trim((string)($tournament['bank_account'] ?? '')) !== ''): ?>
+            <p>Account number: <?= bm_h((string)$tournament['bank_account']) ?></p>
+          <?php endif; ?>
+          <?php if (trim((string)($tournament['bank_ifsc'] ?? '')) !== ''): ?>
+            <p>IFSC: <?= bm_h((string)$tournament['bank_ifsc']) ?></p>
+          <?php endif; ?>
+        </div>
+      <?php endif; ?>
+      <label>Date of payment (dd-mm-yyyy)
+        <input type="text" name="payment_date" id="payment_date" maxlength="10" placeholder="dd-mm-yyyy" value="<?= bm_h($form['payment_date']) ?>">
+      </label>
+      <label>Reference no / UTR
         <input type="text" name="payment_utr" id="payment_utr" inputmode="numeric" maxlength="18" pattern="[0-9]{8,18}" value="<?= bm_h($form['payment_utr']) ?>" placeholder="digits only">
       </label>
-      <label>Payment screenshot
-        <input type="file" name="payment_screenshot" id="payment_screenshot" accept="image/png,image/jpeg,image/webp">
-        <input type="hidden" name="payment_screenshot_b64" id="payment_screenshot_b64">
-        <span class="file-meta" id="crop-kb"></span>
+      <label class="span-2">Sender name
+        <input type="text" name="payment_sender" id="payment_sender" maxlength="160" value="<?= bm_h($form['payment_sender']) ?>" placeholder="Name as on the bank / UPI account that paid">
       </label>
-      <div id="crop-overlay" class="crop-overlay is-hidden">
-        <div class="crop-panel">
-          <p>Drag inside the photo to crop. Then use this photo — it will be reduced in KB but stay visible.</p>
-          <canvas id="crop-canvas"></canvas>
-          <div class="form-actions">
-            <button type="button" class="btn btn-primary" id="crop-use">Use this photo</button>
-            <button type="button" class="btn" id="crop-cancel">Cancel</button>
-          </div>
-        </div>
-      </div>
     </div>
     <?php endif; ?>
 
@@ -223,7 +233,8 @@ require __DIR__ . '/includes/header.php';
   var mDist = document.getElementById('m_district');
   var feeEl = document.getElementById('fee-total');
   var utr = document.getElementById('payment_utr');
-  var shot = document.getElementById('payment_screenshot');
+  var payDate = document.getElementById('payment_date');
+  var paySender = document.getElementById('payment_sender');
   var fees = {
     single: <?= (int)$tournament['fee_single'] ?>,
     double: <?= (int)$tournament['fee_double'] ?>,
@@ -262,9 +273,10 @@ require __DIR__ . '/includes/header.php';
     if (feeEl) feeEl.textContent = tot > 0 ? ('Total to pay: ₹' + tot) : '';
     if (payBox) {
       var showPay = paid && tot > 0;
-      payBox.style.display = showPay ? 'block' : 'none';
+      payBox.style.display = showPay ? 'grid' : 'none';
       if (utr) utr.required = showPay;
-      if (shot) shot.required = showPay;
+      if (payDate) payDate.required = showPay;
+      if (paySender) paySender.required = showPay;
     }
   }
   gender.addEventListener('change', sync);
@@ -277,8 +289,5 @@ require __DIR__ . '/includes/header.php';
   sync();
 })();
 </script>
-<?php if ($isPaid): ?>
-<script src="assets/js/pay-shot.js"></script>
-<?php endif; ?>
 <?php endif; ?>
 <?php require __DIR__ . '/includes/footer.php'; ?>
