@@ -213,6 +213,9 @@ if ($fmt === 'csv') {
                 if (bm_letter_shows($letterFields, 'address')) {
                     $rowOut[] = bm_player_address($p);
                 }
+                if (bm_letter_shows($letterFields, 'free')) {
+                    $rowOut[] = bm_team_is_free($team) ? 'Free' : '';
+                }
                 fputcsv($out, $rowOut);
             }
         }
@@ -292,7 +295,7 @@ require __DIR__ . '/includes/header.php';
       <?php endforeach; ?>
     </fieldset>
     <?php else: ?>
-    <p class="hint">Extra columns (gender, BAI, PBA, Aadhaar, date of birth, address) are the same as the official letter. Tick them there.</p>
+    <p class="hint">Extra columns (gender, BAI, PBA, Aadhaar, date of birth, address, free entry) are the same as the official letter. Tick them there.</p>
     <?php endif; ?>
     <div class="form-actions">
       <button type="submit" name="save_letter" value="1" class="btn btn-primary"><?= $forParents ? 'Save parents &amp; coaches letter' : 'Save letter edits' ?></button>
@@ -348,6 +351,9 @@ require __DIR__ . '/includes/header.php';
                 <?php endif; ?>
                 <?php if (bm_letter_shows($letterFields, 'address')): ?>
                   <td><?= bm_h(($addr = bm_player_address($p)) !== '' ? $addr : '—') ?></td>
+                <?php endif; ?>
+                <?php if (bm_letter_shows($letterFields, 'free')): ?>
+                  <td><?= bm_team_is_free($team) ? 'Free' : '—' ?></td>
                 <?php endif; ?>
               </tr>
               <?php endforeach; ?>

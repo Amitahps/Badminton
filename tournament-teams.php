@@ -47,6 +47,25 @@ if (isset($_POST['delete_team_id'])) {
     bm_redirect($redir);
 }
 
+if (isset($_POST['save_free_entry'])) {
+    $busyCats = $isMix ? $pairedIds : [$catId];
+    $catIn = implode(',', array_fill(0, count($busyCats), '?'));
+    $picked = $_POST['free_team_ids'] ?? [];
+    if (!is_array($picked)) {
+        $picked = [];
+    }
+    $picked = array_fill_keys(array_map('intval', $picked), true);
+    $all = $pdo->prepare("SELECT id FROM tournament_teams WHERE tournament_id=? AND event_code=? AND age_category_id IN ($catIn)");
+    $all->execute(array_merge([$tournamentId, $event], $busyCats));
+    $upd = $pdo->prepare("UPDATE tournament_teams SET free_entry=?, updated_at=datetime('now','localtime') WHERE id=? AND tournament_id=?");
+    foreach ($all->fetchAll() as $row) {
+        $tid = (int)$row['id'];
+        $upd->execute([isset($picked[$tid]) ? 1 : 0, $tid, $tournamentId]);
+    }
+    bm_flash('success', 'Free entry marks saved. They apply to already saved teams on the letter if that column is ticked.');
+    bm_redirect($redir);
+}
+
 /**
  * @param list<int> $playerIds
  * @param list<int> $busyCategoryIds
@@ -271,8 +290,10 @@ require __DIR__ . '/includes/header.php';
 <section class="panel">
   <div class="panel-head"><h2>Saved teams (<?= count($teams) ?>)</h2></div>
   <?php if ($teams): ?>
+  <form method="post" id="save-free-form"></form>
+  <p class="hint" style="margin-top:0;">Tick <strong>Free entry</strong> for any team (including teams already saved). Then Save free entry. The letter shows it only if you tick that column there.</p>
   <table class="table">
-    <thead><tr><th>#</th><th>Team</th><th>Players</th><th></th></tr></thead>
+    <thead><tr><th>#</th><th>Team</th><th>Players</th><th class="check-col">Free entry</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($teams as $i => $team): ?>
       <tr>
@@ -282,6 +303,10 @@ require __DIR__ . '/includes/header.php';
           <?php foreach ($team['members'] as $m): ?>
             <div><?= bm_h($m['full_name']) ?> <span class="muted">(<?= bm_h(bm_gender_label($m['gender'])) ?>)</span></div>
           <?php endforeach; ?>
+        </td>
+        <td class="check-col">
+          <input type="checkbox" form="save-free-form" class="letter-pick" name="free_team_ids[]" value="<?= (int)$team['id'] ?>"
+            <?= bm_team_is_free($team) ? 'checked' : '' ?>>
         </td>
         <td class="right">
           <form method="post" class="inline" onsubmit="return confirm('Remove this team?');">
@@ -293,6 +318,9 @@ require __DIR__ . '/includes/header.php';
     <?php endforeach; ?>
     </tbody>
   </table>
+  <div class="form-actions">
+    <button type="submit" form="save-free-form" name="save_free_entry" value="1" class="btn">Save free entry</button>
+  </div>
   <?php else: ?>
   <p class="empty">No teams saved yet for this category and event.</p>
   <?php endif; ?>

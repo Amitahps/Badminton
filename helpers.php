@@ -354,7 +354,13 @@ function bm_letter_field_defs(): array
         'aadhaar' => 'Aadhaar',
         'dob' => 'Date of birth',
         'address' => 'Address',
+        'free' => 'Free entry',
     ];
+}
+
+function bm_team_is_free(array $team): bool
+{
+    return (int)($team['free_entry'] ?? 0) === 1;
 }
 
 /** @return list<string> */

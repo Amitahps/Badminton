@@ -142,6 +142,7 @@ function bm_init_schema(PDO $pdo): void
             event_code TEXT NOT NULL,
             team_label TEXT,
             include_in_letter INTEGER NOT NULL DEFAULT 1,
+            free_entry INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
@@ -336,6 +337,9 @@ function bm_migrate_schema(PDO $pdo): void
 
     if (bm_table_exists($pdo, 'tournament_teams') && !bm_column_exists($pdo, 'tournament_teams', 'include_in_letter')) {
         $pdo->exec('ALTER TABLE tournament_teams ADD COLUMN include_in_letter INTEGER NOT NULL DEFAULT 1');
+    }
+    if (bm_table_exists($pdo, 'tournament_teams') && !bm_column_exists($pdo, 'tournament_teams', 'free_entry')) {
+        $pdo->exec('ALTER TABLE tournament_teams ADD COLUMN free_entry INTEGER NOT NULL DEFAULT 0');
     }
 
     if (bm_table_exists($pdo, 'users') && !bm_column_exists($pdo, 'users', 'recovery_key_hash')) {
