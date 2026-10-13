@@ -45,7 +45,9 @@ if (isset($_POST['save_parent_edit'])) {
             'gender' => (string)($_POST['gender'] ?? ''),
             'bai_id' => (string)($_POST['bai_id'] ?? ''),
             'pbi_id' => (string)($_POST['pbi_id'] ?? ''),
-            'address' => (string)($_POST['address'] ?? ''),
+            'address' => (string)($_POST['district'] ?? $_POST['address'] ?? ''),
+            'father_name' => (string)($_POST['father_name'] ?? ''),
+            'mobile' => (string)($_POST['contact_mobile'] ?? ''),
         ], 'Player');
         if (!empty($sub['double_partner'])) {
             $dp = bm_parent_update_player_row($pdo, (int)$sub['double_partner']['id'], [
@@ -53,7 +55,9 @@ if (isset($_POST['save_parent_edit'])) {
                 'gender' => (string)$updated['gender'],
                 'bai_id' => (string)($_POST['d_bai_id'] ?? ''),
                 'pbi_id' => (string)($_POST['d_pbi_id'] ?? ''),
-                'address' => (string)($_POST['d_address'] ?? ''),
+                'address' => (string)($_POST['d_district'] ?? $_POST['d_address'] ?? ''),
+                'father_name' => (string)($_POST['d_father_name'] ?? ''),
+                'mobile' => (string)($_POST['d_contact_mobile'] ?? ''),
             ], 'Doubles partner');
             if ((int)$dp['id'] === (int)$updated['id']) {
                 throw new RuntimeException('Doubles partner must be a different player.');
@@ -66,7 +70,9 @@ if (isset($_POST['save_parent_edit'])) {
                 'gender' => $og,
                 'bai_id' => (string)($_POST['m_bai_id'] ?? ''),
                 'pbi_id' => (string)($_POST['m_pbi_id'] ?? ''),
-                'address' => (string)($_POST['m_address'] ?? ''),
+                'address' => (string)($_POST['m_district'] ?? $_POST['m_address'] ?? ''),
+                'father_name' => (string)($_POST['m_father_name'] ?? ''),
+                'mobile' => (string)($_POST['m_contact_mobile'] ?? ''),
             ], 'Mix Double partner');
             if ((int)$mp['id'] === (int)$updated['id']) {
                 throw new RuntimeException('Mix Double partner must be a different player.');
@@ -84,10 +90,10 @@ if (isset($_POST['save_parent_edit'])) {
             if ($newUtr !== '') {
                 $utr = bm_validate_utr($newUtr);
             }
-            $shot = $_FILES['payment_screenshot'] ?? null;
-            if (is_array($shot) && (int)($shot['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
-                $shotHash = bm_upload_sha256($shot);
-                $shotName = bm_save_upload($shot, 'pay');
+            $hasNewShot = trim((string)($_POST['payment_screenshot_b64'] ?? '')) !== ''
+                || (isset($_FILES['payment_screenshot']) && (int)($_FILES['payment_screenshot']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
+            if ($hasNewShot) {
+                [$shotName, $shotHash] = bm_ingest_payment_screenshot($_POST, $_FILES);
             }
             if ($utr !== '' || $shotHash !== '') {
                 bm_assert_unique_payment($pdo, $utr, $shotHash, (int)$sub['id']);
@@ -130,9 +136,6 @@ require __DIR__ . '/includes/header.php';
     <input type="hidden" name="t" value="<?= bm_h($token) ?>">
     <input type="hidden" name="p" value="<?= bm_h($code) ?>">
     <input type="hidden" name="r" value="<?= bm_h($receipt) ?>">
-    <p class="hint span-2">Parent / coach</p>
-    <label>Father’s name<input type="text" name="father_name" required maxlength="160" value="<?= bm_h((string)($sub['father_name'] ?? '')) ?>"></label>
-    <label>Contact number<input type="tel" name="contact_mobile" required maxlength="15" value="<?= bm_h((string)($sub['contact_mobile'] ?? '')) ?>"></label>
     <p class="hint span-2">Player</p>
     <label>Player name<input type="text" name="full_name" required maxlength="160" value="<?= bm_h((string)($p['full_name'] ?? '')) ?>"></label>
     <label>Gender
@@ -142,30 +145,59 @@ require __DIR__ . '/includes/header.php';
       </select>
     </label>
     <label>BAI ID<input type="text" name="bai_id" maxlength="80" value="<?= bm_h((string)($p['bai_id'] ?? '')) ?>"></label>
-    <label>PBA ID<input type="text" name="pbi_id" maxlength="80" value="<?= bm_h((string)($p['pbi_id'] ?? '')) ?>"></label>
-    <label class="span-2">Address<textarea name="address" rows="2"><?= bm_h(bm_player_address($p)) ?></textarea></label>
+    <label>PBI ID<input type="text" name="pbi_id" maxlength="80" value="<?= bm_h((string)($p['pbi_id'] ?? '')) ?>"></label>
+    <label>Father’s name<input type="text" name="father_name" required maxlength="160" value="<?= bm_h((string)($p['father_name'] ?? $sub['father_name'] ?? '')) ?>"></label>
+    <label>Contact<input type="tel" name="contact_mobile" required maxlength="15" value="<?= bm_h((string)($p['mobile'] ?? $sub['contact_mobile'] ?? '')) ?>"></label>
+    <label class="span-2">District<input type="text" name="district" required maxlength="120" value="<?= bm_h(bm_player_address($p)) ?>"></label>
     <?php if ($d): ?>
     <p class="hint span-2">Doubles partner</p>
     <label>Partner name<input type="text" name="d_full_name" required maxlength="160" value="<?= bm_h((string)($d['full_name'] ?? '')) ?>"></label>
     <label>Partner BAI ID<input type="text" name="d_bai_id" maxlength="80" value="<?= bm_h((string)($d['bai_id'] ?? '')) ?>"></label>
-    <label>Partner PBA ID<input type="text" name="d_pbi_id" maxlength="80" value="<?= bm_h((string)($d['pbi_id'] ?? '')) ?>"></label>
-    <label class="span-2">Partner address<textarea name="d_address" rows="2"><?= bm_h(bm_player_address($d)) ?></textarea></label>
+    <label>Partner PBI ID<input type="text" name="d_pbi_id" maxlength="80" value="<?= bm_h((string)($d['pbi_id'] ?? '')) ?>"></label>
+    <label>Partner father’s name<input type="text" name="d_father_name" required maxlength="160" value="<?= bm_h((string)($d['father_name'] ?? '')) ?>"></label>
+    <label>Partner contact<input type="tel" name="d_contact_mobile" required maxlength="15" value="<?= bm_h((string)($d['mobile'] ?? '')) ?>"></label>
+    <label class="span-2">Partner district<input type="text" name="d_district" required maxlength="120" value="<?= bm_h(bm_player_address($d)) ?>"></label>
     <?php endif; ?>
     <?php if ($m): ?>
     <p class="hint span-2">Mix Double partner</p>
     <label>Partner name<input type="text" name="m_full_name" required maxlength="160" value="<?= bm_h((string)($m['full_name'] ?? '')) ?>"></label>
     <label>Partner BAI ID<input type="text" name="m_bai_id" maxlength="80" value="<?= bm_h((string)($m['bai_id'] ?? '')) ?>"></label>
-    <label>Partner PBA ID<input type="text" name="m_pbi_id" maxlength="80" value="<?= bm_h((string)($m['pbi_id'] ?? '')) ?>"></label>
-    <label class="span-2">Partner address<textarea name="m_address" rows="2"><?= bm_h(bm_player_address($m)) ?></textarea></label>
+    <label>Partner PBI ID<input type="text" name="m_pbi_id" maxlength="80" value="<?= bm_h((string)($m['pbi_id'] ?? '')) ?>"></label>
+    <label>Partner father’s name<input type="text" name="m_father_name" required maxlength="160" value="<?= bm_h((string)($m['father_name'] ?? '')) ?>"></label>
+    <label>Partner contact<input type="tel" name="m_contact_mobile" required maxlength="15" value="<?= bm_h((string)($m['mobile'] ?? '')) ?>"></label>
+    <label class="span-2">Partner district<input type="text" name="m_district" required maxlength="120" value="<?= bm_h(bm_player_address($m)) ?>"></label>
     <?php endif; ?>
     <?php if (($sub['payment_status'] ?? '') === 'pending'): ?>
     <p class="hint span-2">Payment (pending)</p>
-    <label>UTR / reference number<input type="text" name="payment_utr" inputmode="numeric" maxlength="18" value="<?= bm_h((string)($sub['payment_utr'] ?? '')) ?>"></label>
-    <label class="span-2">Replace screenshot<input type="file" name="payment_screenshot" accept="image/png,image/jpeg,image/webp,application/pdf"></label>
+    <label>UTR / reference number<input type="text" name="payment_utr" id="payment_utr" inputmode="numeric" maxlength="18" pattern="[0-9]{8,18}" value="<?= bm_h((string)($sub['payment_utr'] ?? '')) ?>"></label>
+    <label class="span-2">Replace screenshot
+      <input type="file" name="payment_screenshot" id="payment_screenshot" accept="image/png,image/jpeg,image/webp">
+      <input type="hidden" name="payment_screenshot_b64" id="payment_screenshot_b64">
+      <span class="file-meta" id="crop-kb"></span>
+    </label>
+    <div id="crop-overlay" class="crop-overlay is-hidden">
+      <div class="crop-panel">
+        <p>Drag to crop, then use this photo. It is auto-sized in KB but stays visible.</p>
+        <canvas id="crop-canvas"></canvas>
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary" id="crop-use">Use this photo</button>
+          <button type="button" class="btn" id="crop-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
     <?php endif; ?>
     <div class="form-actions span-2">
       <button type="submit" name="save_parent_edit" value="1" class="btn btn-primary">Save changes</button>
     </div>
   </form>
 </section>
+<?php if (($sub['payment_status'] ?? '') === 'pending'): ?>
+<script>
+(function(){
+  var utr = document.getElementById('payment_utr');
+  if (utr) utr.addEventListener('input', function(){ utr.value = utr.value.replace(/[^0-9]/g, ''); });
+})();
+</script>
+<script src="assets/js/pay-shot.js"></script>
+<?php endif; ?>
 <?php require __DIR__ . '/includes/footer.php'; ?>

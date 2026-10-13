@@ -19,14 +19,6 @@ $dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
 $parentCode = bm_own_parent_code($token);
 $ownReceipt = bm_own_parent_receipt($token);
 $isPaid = bm_tournament_is_paid($tournament);
-$ctx = [];
-if ($parentCode !== '') {
-    $mine = bm_parent_submissions_for_code($pdo, (int)$tournament['id'], $parentCode);
-    if ($mine) {
-        $ctx['father_name'] = (string)($mine[0]['father_name'] ?? '');
-        $ctx['contact_mobile'] = (string)($mine[0]['contact_mobile'] ?? '');
-    }
-}
 
 if (isset($_POST['save_parent'])) {
     try {
@@ -45,22 +37,26 @@ if (isset($_POST['save_parent'])) {
 
 $form = [
     'age_key' => (string)($_POST['age_key'] ?? ''),
-    'father_name' => (string)($_POST['father_name'] ?? $ctx['father_name'] ?? ''),
-    'contact_mobile' => (string)($_POST['contact_mobile'] ?? $ctx['contact_mobile'] ?? ''),
+    'father_name' => (string)($_POST['father_name'] ?? ''),
+    'contact_mobile' => (string)($_POST['contact_mobile'] ?? ''),
     'full_name' => (string)($_POST['full_name'] ?? ''),
     'gender' => (string)($_POST['gender'] ?? ''),
     'bai_id' => (string)($_POST['bai_id'] ?? ''),
     'pbi_id' => (string)($_POST['pbi_id'] ?? ''),
-    'address' => (string)($_POST['address'] ?? ''),
+    'district' => (string)($_POST['district'] ?? $_POST['address'] ?? ''),
     'events' => is_array($_POST['events'] ?? null) ? $_POST['events'] : [],
     'd_full_name' => (string)($_POST['d_full_name'] ?? ''),
     'd_bai_id' => (string)($_POST['d_bai_id'] ?? ''),
     'd_pbi_id' => (string)($_POST['d_pbi_id'] ?? ''),
-    'd_address' => (string)($_POST['d_address'] ?? ''),
+    'd_father_name' => (string)($_POST['d_father_name'] ?? ''),
+    'd_contact_mobile' => (string)($_POST['d_contact_mobile'] ?? ''),
+    'd_district' => (string)($_POST['d_district'] ?? ''),
     'm_full_name' => (string)($_POST['m_full_name'] ?? ''),
     'm_bai_id' => (string)($_POST['m_bai_id'] ?? ''),
     'm_pbi_id' => (string)($_POST['m_pbi_id'] ?? ''),
-    'm_address' => (string)($_POST['m_address'] ?? ''),
+    'm_father_name' => (string)($_POST['m_father_name'] ?? ''),
+    'm_contact_mobile' => (string)($_POST['m_contact_mobile'] ?? ''),
+    'm_district' => (string)($_POST['m_district'] ?? ''),
     'payment_utr' => (string)($_POST['payment_utr'] ?? ''),
 ];
 
@@ -93,15 +89,7 @@ require __DIR__ . '/includes/header.php';
     <input type="hidden" name="parent_code" value="<?= bm_h($parentCode) ?>">
     <?php endif; ?>
 
-    <p class="hint span-2">1. Parent / coach</p>
-    <label>Father’s name
-      <input type="text" name="father_name" required maxlength="160" value="<?= bm_h($form['father_name']) ?>">
-    </label>
-    <label>Contact number
-      <input type="tel" name="contact_mobile" required maxlength="15" inputmode="numeric" value="<?= bm_h($form['contact_mobile']) ?>" placeholder="10-digit mobile">
-    </label>
-
-    <label class="span-2">2. Age category
+    <label class="span-2">1. Age category
       <select name="age_key" id="age_key" required>
         <option value="">Select age</option>
         <?php foreach ($ageOptions as $opt): ?>
@@ -110,7 +98,7 @@ require __DIR__ . '/includes/header.php';
       </select>
     </label>
 
-    <p class="hint span-2">3. Player details</p>
+    <p class="hint span-2">2. Player</p>
     <label>Player name
       <input type="text" name="full_name" required maxlength="160" value="<?= bm_h($form['full_name']) ?>">
     </label>
@@ -122,11 +110,19 @@ require __DIR__ . '/includes/header.php';
       </select>
     </label>
     <label>BAI ID<input type="text" name="bai_id" maxlength="80" value="<?= bm_h($form['bai_id']) ?>"></label>
-    <label>PBA ID<input type="text" name="pbi_id" maxlength="80" value="<?= bm_h($form['pbi_id']) ?>"></label>
-    <label class="span-2">Address<textarea name="address" rows="2"><?= bm_h($form['address']) ?></textarea></label>
+    <label>PBI ID<input type="text" name="pbi_id" maxlength="80" value="<?= bm_h($form['pbi_id']) ?>"></label>
+    <label>Father’s name
+      <input type="text" name="father_name" required maxlength="160" value="<?= bm_h($form['father_name']) ?>">
+    </label>
+    <label>Contact
+      <input type="tel" name="contact_mobile" required maxlength="15" inputmode="numeric" value="<?= bm_h($form['contact_mobile']) ?>" placeholder="10-digit mobile">
+    </label>
+    <label class="span-2">District
+      <input type="text" name="district" required maxlength="120" value="<?= bm_h($form['district']) ?>">
+    </label>
 
     <div id="event-box" class="event-pick-box">
-      <p class="hint">4. Events for this age (tick all that apply)</p>
+      <p class="hint">3. Events for this age (tick all that apply)</p>
       <div class="event-row">
         <input type="checkbox" class="ev" id="ev-single" name="events[]" value="single" <?= in_array('single', $form['events'], true) ? 'checked' : '' ?>>
         <label for="ev-single">Single<?php if ($isPaid && (int)$tournament['fee_single'] > 0): ?> <span class="muted">(<?= bm_h(bm_rupees((int)$tournament['fee_single'])) ?>)</span><?php endif; ?></label>
@@ -144,30 +140,34 @@ require __DIR__ . '/includes/header.php';
       <?php endif; ?>
     </div>
 
-    <div id="double-box" class="partner-box">
+    <div id="double-box" class="partner-box form-grid">
       <h2>Doubles partner</h2>
       <p class="hint">Required because Doubles is selected. Same gender as the player.</p>
       <label>Partner name<input type="text" name="d_full_name" id="d_full_name" maxlength="160" value="<?= bm_h($form['d_full_name']) ?>"></label>
       <p class="hint" id="d-gender-hint"></p>
       <label>Partner BAI ID<input type="text" name="d_bai_id" maxlength="80" value="<?= bm_h($form['d_bai_id']) ?>"></label>
-      <label>Partner PBA ID<input type="text" name="d_pbi_id" maxlength="80" value="<?= bm_h($form['d_pbi_id']) ?>"></label>
-      <label class="span-2">Partner address<textarea name="d_address" rows="2"><?= bm_h($form['d_address']) ?></textarea></label>
+      <label>Partner PBI ID<input type="text" name="d_pbi_id" maxlength="80" value="<?= bm_h($form['d_pbi_id']) ?>"></label>
+      <label>Partner father’s name<input type="text" name="d_father_name" id="d_father_name" maxlength="160" value="<?= bm_h($form['d_father_name']) ?>"></label>
+      <label>Partner contact<input type="tel" name="d_contact_mobile" id="d_contact_mobile" maxlength="15" inputmode="numeric" value="<?= bm_h($form['d_contact_mobile']) ?>"></label>
+      <label class="span-2">Partner district<input type="text" name="d_district" id="d_district" maxlength="120" value="<?= bm_h($form['d_district']) ?>"></label>
     </div>
 
-    <div id="mix-box" class="partner-box">
+    <div id="mix-box" class="partner-box form-grid">
       <h2>Mix Double partner</h2>
       <p class="hint">Required because Mix Double is selected. Opposite gender (boy + girl).</p>
       <label>Partner name<input type="text" name="m_full_name" id="m_full_name" maxlength="160" value="<?= bm_h($form['m_full_name']) ?>"></label>
       <p class="hint" id="m-gender-hint"></p>
       <label>Partner BAI ID<input type="text" name="m_bai_id" maxlength="80" value="<?= bm_h($form['m_bai_id']) ?>"></label>
-      <label>Partner PBA ID<input type="text" name="m_pbi_id" maxlength="80" value="<?= bm_h($form['m_pbi_id']) ?>"></label>
-      <label class="span-2">Partner address<textarea name="m_address" rows="2"><?= bm_h($form['m_address']) ?></textarea></label>
+      <label>Partner PBI ID<input type="text" name="m_pbi_id" maxlength="80" value="<?= bm_h($form['m_pbi_id']) ?>"></label>
+      <label>Partner father’s name<input type="text" name="m_father_name" id="m_father_name" maxlength="160" value="<?= bm_h($form['m_father_name']) ?>"></label>
+      <label>Partner contact<input type="tel" name="m_contact_mobile" id="m_contact_mobile" maxlength="15" inputmode="numeric" value="<?= bm_h($form['m_contact_mobile']) ?>"></label>
+      <label class="span-2">Partner district<input type="text" name="m_district" id="m_district" maxlength="120" value="<?= bm_h($form['m_district']) ?>"></label>
     </div>
 
     <?php if ($isPaid): ?>
     <div id="pay-box" class="partner-box pay-box">
       <h2>Payment</h2>
-      <p class="hint">Pay the total by UPI, then enter the UTR / reference number (digits only) and upload the screenshot. Duplicate UTR or screenshot will not save.</p>
+      <p class="hint">Pay the total by UPI. UTR / reference number must be digits only — no dots, commas or words. The same UTR or the same screenshot cannot be used again. Crop the photo; it is auto-sized (KB) but stays readable.</p>
       <?php if (trim((string)($tournament['upi_id'] ?? '')) !== ''): ?>
         <p><strong>UPI:</strong> <?= bm_h((string)$tournament['upi_id']) ?></p>
       <?php endif; ?>
@@ -175,11 +175,23 @@ require __DIR__ . '/includes/header.php';
         <p><img class="qr-img" src="join-qr.php?t=<?= bm_h(urlencode($token)) ?>" alt="Payment QR"></p>
       <?php endif; ?>
       <label>UTR / reference number
-        <input type="text" name="payment_utr" id="payment_utr" inputmode="numeric" maxlength="18" pattern="[0-9]*" value="<?= bm_h($form['payment_utr']) ?>" placeholder="digits only">
+        <input type="text" name="payment_utr" id="payment_utr" inputmode="numeric" maxlength="18" pattern="[0-9]{8,18}" value="<?= bm_h($form['payment_utr']) ?>" placeholder="digits only">
       </label>
       <label>Payment screenshot
-        <input type="file" name="payment_screenshot" id="payment_screenshot" accept="image/png,image/jpeg,image/webp,application/pdf">
+        <input type="file" name="payment_screenshot" id="payment_screenshot" accept="image/png,image/jpeg,image/webp">
+        <input type="hidden" name="payment_screenshot_b64" id="payment_screenshot_b64">
+        <span class="file-meta" id="crop-kb"></span>
       </label>
+      <div id="crop-overlay" class="crop-overlay is-hidden">
+        <div class="crop-panel">
+          <p>Drag inside the photo to crop. Then use this photo — it will be reduced in KB but stay visible.</p>
+          <canvas id="crop-canvas"></canvas>
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary" id="crop-use">Use this photo</button>
+            <button type="button" class="btn" id="crop-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
     </div>
     <?php endif; ?>
 
@@ -203,6 +215,12 @@ require __DIR__ . '/includes/header.php';
   var mHint = document.getElementById('m-gender-hint');
   var dName = document.getElementById('d_full_name');
   var mName = document.getElementById('m_full_name');
+  var dFather = document.getElementById('d_father_name');
+  var dContact = document.getElementById('d_contact_mobile');
+  var dDist = document.getElementById('d_district');
+  var mFather = document.getElementById('m_father_name');
+  var mContact = document.getElementById('m_contact_mobile');
+  var mDist = document.getElementById('m_district');
   var feeEl = document.getElementById('fee-total');
   var utr = document.getElementById('payment_utr');
   var shot = document.getElementById('payment_screenshot');
@@ -228,10 +246,16 @@ require __DIR__ . '/includes/header.php';
     else labDouble.firstChild.textContent = 'Doubles';
     var showD = hasG && evDouble.checked;
     var showM = hasG && evMix.checked;
-    dBox.style.display = showD ? 'block' : 'none';
-    mBox.style.display = showM ? 'block' : 'none';
+    dBox.style.display = showD ? 'grid' : 'none';
+    mBox.style.display = showM ? 'grid' : 'none';
     dName.required = showD;
     mName.required = showM;
+    if (dFather) dFather.required = showD;
+    if (dContact) dContact.required = showD;
+    if (dDist) dDist.required = showD;
+    if (mFather) mFather.required = showM;
+    if (mContact) mContact.required = showM;
+    if (mDist) mDist.required = showM;
     dHint.textContent = showD ? ('Partner gender: ' + (g() === 'girl' ? 'Girl' : 'Boy') + ' (same as player)') : '';
     mHint.textContent = showM ? ('Partner gender: ' + (g() === 'girl' ? 'Boy' : 'Girl') + ' (opposite, for Mix Double)') : '';
     var tot = total();
@@ -253,5 +277,8 @@ require __DIR__ . '/includes/header.php';
   sync();
 })();
 </script>
+<?php if ($isPaid): ?>
+<script src="assets/js/pay-shot.js"></script>
+<?php endif; ?>
 <?php endif; ?>
 <?php require __DIR__ . '/includes/footer.php'; ?>

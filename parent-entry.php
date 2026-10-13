@@ -118,7 +118,7 @@ function bm_parent_resolve_category(PDO $pdo, string $ageKey, string $gender, in
 }
 
 /**
- * @param array{full_name:string,gender:string,bai_id?:string,pbi_id?:string,address?:string} $data
+ * @param array{full_name:string,gender:string,bai_id?:string,pbi_id?:string,address?:string,father_name?:string,mobile?:string} $data
  */
 function bm_parent_find_or_create_player(PDO $pdo, array $data, string $who = 'Player'): array
 {
@@ -126,12 +126,26 @@ function bm_parent_find_or_create_player(PDO $pdo, array $data, string $who = 'P
     $gender = strtolower(trim((string)($data['gender'] ?? '')));
     $bai = trim((string)($data['bai_id'] ?? ''));
     $pba = trim((string)($data['pbi_id'] ?? ''));
-    $address = trim((string)($data['address'] ?? ''));
+    $address = trim((string)($data['address'] ?? $data['district'] ?? ''));
+    $father = trim((string)($data['father_name'] ?? ''));
+    $mobile = trim((string)($data['mobile'] ?? $data['contact_mobile'] ?? ''));
+    if ($mobile !== '') {
+        $mobile = bm_normalize_mobile($mobile);
+    }
     if ($name === '') {
         throw new RuntimeException($who . ' name is required.');
     }
     if (!in_array($gender, ['boy', 'girl'], true)) {
         throw new RuntimeException('Select Boy or Girl for ' . $who . '.');
+    }
+    if ($father === '') {
+        throw new RuntimeException('Father’s name is required for ' . $who . '.');
+    }
+    if ($mobile === '') {
+        throw new RuntimeException('Contact number is required for ' . $who . '.');
+    }
+    if ($address === '') {
+        throw new RuntimeException('District is required for ' . $who . '.');
     }
 
     $existing = null;
@@ -170,6 +184,7 @@ function bm_parent_find_or_create_player(PDO $pdo, array $data, string $who = 'P
         $pdo->prepare("UPDATE players SET
             full_name=?, bai_id=COALESCE(NULLIF(?, ''), bai_id), pbi_id=COALESCE(NULLIF(?, ''), pbi_id),
             address=COALESCE(NULLIF(?, ''), address), remarks=COALESCE(NULLIF(?, ''), remarks),
+            father_name=COALESCE(NULLIF(?, ''), father_name), mobile=COALESCE(NULLIF(?, ''), mobile),
             updated_at=datetime('now','localtime')
             WHERE id=?")->execute([
             $name,
@@ -177,6 +192,8 @@ function bm_parent_find_or_create_player(PDO $pdo, array $data, string $who = 'P
             $pba !== '' ? $pba : null,
             $address !== '' ? $address : null,
             $address !== '' ? $address : null,
+            $father !== '' ? $father : null,
+            $mobile !== '' ? $mobile : null,
             $eid,
         ]);
         $st = $pdo->prepare('SELECT * FROM players WHERE id=?');
@@ -185,7 +202,7 @@ function bm_parent_find_or_create_player(PDO $pdo, array $data, string $who = 'P
     }
 
     bm_assert_unique_player_ids($pdo, $bai !== '' ? $bai : null, $pba !== '' ? $pba : null, 0);
-    $pdo->prepare("INSERT INTO players (full_name, gender, bai_id, pbi_id, address, remarks) VALUES (?,?,?,?,?,?)")
+    $pdo->prepare("INSERT INTO players (full_name, gender, bai_id, pbi_id, address, remarks, father_name, mobile) VALUES (?,?,?,?,?,?,?,?)")
         ->execute([
             $name,
             $gender,
@@ -193,6 +210,8 @@ function bm_parent_find_or_create_player(PDO $pdo, array $data, string $who = 'P
             $pba !== '' ? $pba : null,
             $address !== '' ? $address : null,
             $address !== '' ? $address : null,
+            $father !== '' ? $father : null,
+            $mobile !== '' ? $mobile : null,
         ]);
     $id = (int)$pdo->lastInsertId();
     $st = $pdo->prepare('SELECT * FROM players WHERE id=?');
@@ -287,7 +306,9 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
         'gender' => $gender,
         'bai_id' => (string)($post['bai_id'] ?? ''),
         'pbi_id' => (string)($post['pbi_id'] ?? ''),
-        'address' => (string)($post['address'] ?? ''),
+        'address' => (string)($post['district'] ?? $post['address'] ?? ''),
+        'father_name' => (string)($post['father_name'] ?? ''),
+        'mobile' => (string)($post['contact_mobile'] ?? ''),
     ], 'Player');
 
     $doublePartner = null;
@@ -299,7 +320,9 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
             'gender' => $pg,
             'bai_id' => (string)($post['d_bai_id'] ?? ''),
             'pbi_id' => (string)($post['d_pbi_id'] ?? ''),
-            'address' => (string)($post['d_address'] ?? ''),
+            'address' => (string)($post['d_district'] ?? $post['d_address'] ?? ''),
+            'father_name' => (string)($post['d_father_name'] ?? ''),
+            'mobile' => (string)($post['d_contact_mobile'] ?? ''),
         ], 'Doubles partner');
         if ((int)$doublePartner['id'] === (int)$primary['id']) {
             throw new RuntimeException('Doubles partner must be a different player.');
@@ -315,7 +338,9 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
             'gender' => $og,
             'bai_id' => (string)($post['m_bai_id'] ?? ''),
             'pbi_id' => (string)($post['m_pbi_id'] ?? ''),
-            'address' => (string)($post['m_address'] ?? ''),
+            'address' => (string)($post['m_district'] ?? $post['m_address'] ?? ''),
+            'father_name' => (string)($post['m_father_name'] ?? ''),
+            'mobile' => (string)($post['m_contact_mobile'] ?? ''),
         ], 'Mix Double partner');
         if ((int)$mixPartner['id'] === (int)$primary['id']) {
             throw new RuntimeException('Mix Double partner must be a different player.');
@@ -344,13 +369,8 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
     $shotHash = null;
     if ($needPay) {
         $utr = bm_validate_utr((string)($post['payment_utr'] ?? ''));
-        $shot = $files['payment_screenshot'] ?? null;
-        if (!is_array($shot) || (int)($shot['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-            throw new RuntimeException('Upload the payment screenshot.');
-        }
-        $shotHash = bm_upload_sha256($shot);
+        [$shotName, $shotHash] = bm_ingest_payment_screenshot($post, $files);
         bm_assert_unique_payment($pdo, $utr, $shotHash, 0);
-        $shotName = bm_save_upload($shot, 'pay');
     }
     $parentCode = bm_parent_code_from_post_or_session((string)($tournament['public_token'] ?? ''), (string)($post['parent_code'] ?? ''));
 
@@ -482,13 +502,12 @@ function bm_normalize_mobile(string $raw): string
 
 function bm_validate_utr(string $raw): string
 {
-    $utr = strtoupper(trim($raw));
-    $utr = str_replace(["\n", "\r", "\t", ' '], '', $utr);
-    if ($utr === '' || preg_match('/[^0-9]/', $utr)) {
-        throw new RuntimeException('UTR / reference number must be digits only — no commas, spaces or words.');
+    $utr = trim($raw);
+    if ($utr === '') {
+        throw new RuntimeException('UTR / reference number is required.');
     }
-    if (strlen($utr) < 8 || strlen($utr) > 18) {
-        throw new RuntimeException('UTR / reference number must be 8 to 18 digits.');
+    if (preg_match('/[.,\s]|[^0-9]/', $utr) || !preg_match('/^[0-9]{8,18}$/', $utr)) {
+        throw new RuntimeException('UTR / reference number must be digits only. Dots, commas, spaces or words at the start, middle or end are not accepted.');
     }
     return $utr;
 }
@@ -504,6 +523,85 @@ function bm_upload_sha256(array $file): string
         throw new RuntimeException('Could not read the payment screenshot.');
     }
     return $hash;
+}
+
+/**
+ * @return array{0:string,1:string} filename, sha256
+ */
+function bm_ingest_payment_screenshot(array $post, array $files): array
+{
+    $b64 = trim((string)($post['payment_screenshot_b64'] ?? ''));
+    $bin = null;
+    if ($b64 !== '') {
+        if (!preg_match('#^data:image/(jpeg|jpg|png|webp);base64,#i', $b64)) {
+            throw new RuntimeException('Payment screenshot is not a valid image.');
+        }
+        $raw = base64_decode(substr($b64, (int)strpos($b64, ',') + 1), true);
+        if (!is_string($raw) || strlen($raw) < 80) {
+            throw new RuntimeException('Upload the payment screenshot.');
+        }
+        if (strlen($raw) > 2_500_000) {
+            throw new RuntimeException('Payment screenshot is too large. Crop and try again.');
+        }
+        $bin = $raw;
+    } else {
+        $file = $files['payment_screenshot'] ?? null;
+        if (!is_array($file) || (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            throw new RuntimeException('Upload the payment screenshot.');
+        }
+        if ((int)($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+            throw new RuntimeException('File upload failed.');
+        }
+        $tmp = (string)($file['tmp_name'] ?? '');
+        if ($tmp === '' || !is_file($tmp)) {
+            throw new RuntimeException('Upload the payment screenshot.');
+        }
+        $bin = (string)file_get_contents($tmp);
+    }
+    $bin = bm_compress_image_bytes($bin);
+    $hash = hash('sha256', $bin);
+    $name = 'pay_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)) . '.jpg';
+    $dest = BM_UPLOAD_DIR . '/' . $name;
+    if (file_put_contents($dest, $bin) === false) {
+        throw new RuntimeException('Could not save the payment screenshot.');
+    }
+    return [$name, $hash];
+}
+
+function bm_compress_image_bytes(string $bin): string
+{
+    if (!function_exists('imagecreatefromstring') || !function_exists('imagejpeg')) {
+        return $bin;
+    }
+    $im = @imagecreatefromstring($bin);
+    if (!$im) {
+        throw new RuntimeException('Payment screenshot must be a JPG, PNG or WEBP photo.');
+    }
+    $w = imagesx($im);
+    $h = imagesy($im);
+    $max = 1400;
+    if ($w > $max || $h > $max) {
+        $scale = $max / max($w, $h);
+        $nw = max(1, (int)round($w * $scale));
+        $nh = max(1, (int)round($h * $scale));
+        $dst = imagecreatetruecolor($nw, $nh);
+        imagecopyresampled($dst, $im, 0, 0, 0, 0, $nw, $nh, $w, $h);
+        imagedestroy($im);
+        $im = $dst;
+    }
+    $quality = 78;
+    $out = $bin;
+    for ($i = 0; $i < 6; $i++) {
+        ob_start();
+        imagejpeg($im, null, $quality);
+        $out = (string)ob_get_clean();
+        if (strlen($out) <= 180000 || $quality <= 45) {
+            break;
+        }
+        $quality -= 8;
+    }
+    imagedestroy($im);
+    return $out !== '' ? $out : $bin;
 }
 
 function bm_assert_unique_payment(PDO $pdo, string $utr, string $hash, int $exceptId = 0): void
@@ -675,15 +773,29 @@ function bm_parent_update_player_row(PDO $pdo, int $playerId, array $data, strin
     $gender = strtolower(trim((string)($data['gender'] ?? '')));
     $bai = trim((string)($data['bai_id'] ?? ''));
     $pba = trim((string)($data['pbi_id'] ?? ''));
-    $address = trim((string)($data['address'] ?? ''));
+    $address = trim((string)($data['address'] ?? $data['district'] ?? ''));
+    $father = trim((string)($data['father_name'] ?? ''));
+    $mobile = trim((string)($data['mobile'] ?? $data['contact_mobile'] ?? ''));
+    if ($mobile !== '') {
+        $mobile = bm_normalize_mobile($mobile);
+    }
     if ($name === '') {
         throw new RuntimeException($who . ' name is required.');
     }
     if (!in_array($gender, ['boy', 'girl'], true)) {
         throw new RuntimeException('Select Boy or Girl for ' . $who . '.');
     }
+    if ($father === '') {
+        throw new RuntimeException('Father’s name is required for ' . $who . '.');
+    }
+    if ($mobile === '') {
+        throw new RuntimeException('Contact number is required for ' . $who . '.');
+    }
+    if ($address === '') {
+        throw new RuntimeException('District is required for ' . $who . '.');
+    }
     bm_assert_unique_player_ids($pdo, $bai !== '' ? $bai : null, $pba !== '' ? $pba : null, $playerId);
-    $pdo->prepare("UPDATE players SET full_name=?, gender=?, bai_id=?, pbi_id=?, address=?, remarks=?, updated_at=datetime('now','localtime') WHERE id=?")
+    $pdo->prepare("UPDATE players SET full_name=?, gender=?, bai_id=?, pbi_id=?, address=?, remarks=?, father_name=?, mobile=?, updated_at=datetime('now','localtime') WHERE id=?")
         ->execute([
             $name,
             $gender,
@@ -691,6 +803,8 @@ function bm_parent_update_player_row(PDO $pdo, int $playerId, array $data, strin
             $pba !== '' ? $pba : null,
             $address !== '' ? $address : null,
             $address !== '' ? $address : null,
+            $father !== '' ? $father : null,
+            $mobile !== '' ? $mobile : null,
             $playerId,
         ]);
     $st->execute([$playerId]);

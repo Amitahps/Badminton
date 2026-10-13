@@ -57,7 +57,9 @@ if (isset($_POST['save_parent_edit'])) {
             'gender' => (string)($_POST['gender'] ?? ''),
             'bai_id' => (string)($_POST['bai_id'] ?? ''),
             'pbi_id' => (string)($_POST['pbi_id'] ?? ''),
-            'address' => (string)($_POST['address'] ?? ''),
+            'address' => (string)($_POST['district'] ?? $_POST['address'] ?? ''),
+            'father_name' => (string)($_POST['father_name'] ?? ''),
+            'mobile' => (string)($_POST['contact_mobile'] ?? ''),
         ], 'Player');
         if (!empty($sub['double_partner'])) {
             $dp = bm_parent_update_player_row($pdo, (int)$sub['double_partner']['id'], [
@@ -65,7 +67,9 @@ if (isset($_POST['save_parent_edit'])) {
                 'gender' => (string)$updated['gender'],
                 'bai_id' => (string)($_POST['d_bai_id'] ?? ''),
                 'pbi_id' => (string)($_POST['d_pbi_id'] ?? ''),
-                'address' => (string)($_POST['d_address'] ?? ''),
+                'address' => (string)($_POST['d_district'] ?? $_POST['d_address'] ?? ''),
+                'father_name' => (string)($_POST['d_father_name'] ?? ''),
+                'mobile' => (string)($_POST['d_contact_mobile'] ?? ''),
             ], 'Doubles partner');
             if ((int)$dp['id'] === (int)$updated['id']) {
                 throw new RuntimeException('Doubles partner must be a different player.');
@@ -78,7 +82,9 @@ if (isset($_POST['save_parent_edit'])) {
                 'gender' => $og,
                 'bai_id' => (string)($_POST['m_bai_id'] ?? ''),
                 'pbi_id' => (string)($_POST['m_pbi_id'] ?? ''),
-                'address' => (string)($_POST['m_address'] ?? ''),
+                'address' => (string)($_POST['m_district'] ?? $_POST['m_address'] ?? ''),
+                'father_name' => (string)($_POST['m_father_name'] ?? ''),
+                'mobile' => (string)($_POST['m_contact_mobile'] ?? ''),
             ], 'Mix Double partner');
             if ((int)$mp['id'] === (int)$updated['id']) {
                 throw new RuntimeException('Mix Double partner must be a different player.');
@@ -119,6 +125,7 @@ require __DIR__ . '/includes/header.php';
     <p class="lede">Change the details sent by the parent. This updates the letter and Excel. Removing the entry takes it out of the letter. Assign-players (old method) is not affected.</p>
   </div>
   <div class="page-actions">
+    <a class="btn" href="parent-verify.php?tournament_id=<?= (int)$tournament['id'] ?>">Verify / Excel</a>
     <a class="btn" href="letter.php?id=<?= (int)$tournament['id'] ?>">Open letter PDF</a>
     <a class="btn" href="letter.php?id=<?= (int)$tournament['id'] ?>&amp;for=parents">Parents &amp; coaches PDF</a>
     <a class="btn" href="tournament.php?id=<?= (int)$tournament['id'] ?>">Back</a>
@@ -134,9 +141,6 @@ require __DIR__ . '/includes/header.php';
   </p>
   <form method="post" class="form form-grid">
     <input type="hidden" name="id" value="<?= $id ?>">
-    <p class="hint span-2">Parent / coach</p>
-    <label>Father’s name<input type="text" name="father_name" maxlength="160" value="<?= bm_h((string)($sub['father_name'] ?? '')) ?>"></label>
-    <label>Contact number<input type="tel" name="contact_mobile" maxlength="15" value="<?= bm_h((string)($sub['contact_mobile'] ?? '')) ?>"></label>
     <p class="hint span-2">Player</p>
     <label>Player name<input type="text" name="full_name" required maxlength="160" value="<?= bm_h((string)($p['full_name'] ?? '')) ?>"></label>
     <label>Gender
@@ -146,23 +150,29 @@ require __DIR__ . '/includes/header.php';
       </select>
     </label>
     <label>BAI ID<input type="text" name="bai_id" maxlength="80" value="<?= bm_h((string)($p['bai_id'] ?? '')) ?>"></label>
-    <label>PBA ID<input type="text" name="pbi_id" maxlength="80" value="<?= bm_h((string)($p['pbi_id'] ?? '')) ?>"></label>
-    <label class="span-2">Address<textarea name="address" rows="2"><?= bm_h(bm_player_address($p)) ?></textarea></label>
+    <label>PBI ID<input type="text" name="pbi_id" maxlength="80" value="<?= bm_h((string)($p['pbi_id'] ?? '')) ?>"></label>
+    <label>Father’s name<input type="text" name="father_name" required maxlength="160" value="<?= bm_h((string)($p['father_name'] ?? $sub['father_name'] ?? '')) ?>"></label>
+    <label>Contact<input type="tel" name="contact_mobile" required maxlength="15" value="<?= bm_h((string)($p['mobile'] ?? $sub['contact_mobile'] ?? '')) ?>"></label>
+    <label class="span-2">District<input type="text" name="district" required maxlength="120" value="<?= bm_h(bm_player_address($p)) ?>"></label>
 
     <?php if ($d): ?>
     <p class="hint span-2">Doubles partner</p>
     <label>Partner name<input type="text" name="d_full_name" required maxlength="160" value="<?= bm_h((string)($d['full_name'] ?? '')) ?>"></label>
     <label>Partner BAI ID<input type="text" name="d_bai_id" maxlength="80" value="<?= bm_h((string)($d['bai_id'] ?? '')) ?>"></label>
-    <label>Partner PBA ID<input type="text" name="d_pbi_id" maxlength="80" value="<?= bm_h((string)($d['pbi_id'] ?? '')) ?>"></label>
-    <label class="span-2">Partner address<textarea name="d_address" rows="2"><?= bm_h(bm_player_address($d)) ?></textarea></label>
+    <label>Partner PBI ID<input type="text" name="d_pbi_id" maxlength="80" value="<?= bm_h((string)($d['pbi_id'] ?? '')) ?>"></label>
+    <label>Partner father’s name<input type="text" name="d_father_name" required maxlength="160" value="<?= bm_h((string)($d['father_name'] ?? '')) ?>"></label>
+    <label>Partner contact<input type="tel" name="d_contact_mobile" required maxlength="15" value="<?= bm_h((string)($d['mobile'] ?? '')) ?>"></label>
+    <label class="span-2">Partner district<input type="text" name="d_district" required maxlength="120" value="<?= bm_h(bm_player_address($d)) ?>"></label>
     <?php endif; ?>
 
     <?php if ($m): ?>
     <p class="hint span-2">Mix Double partner</p>
     <label>Partner name<input type="text" name="m_full_name" required maxlength="160" value="<?= bm_h((string)($m['full_name'] ?? '')) ?>"></label>
     <label>Partner BAI ID<input type="text" name="m_bai_id" maxlength="80" value="<?= bm_h((string)($m['bai_id'] ?? '')) ?>"></label>
-    <label>Partner PBA ID<input type="text" name="m_pbi_id" maxlength="80" value="<?= bm_h((string)($m['pbi_id'] ?? '')) ?>"></label>
-    <label class="span-2">Partner address<textarea name="m_address" rows="2"><?= bm_h(bm_player_address($m)) ?></textarea></label>
+    <label>Partner PBI ID<input type="text" name="m_pbi_id" maxlength="80" value="<?= bm_h((string)($m['pbi_id'] ?? '')) ?>"></label>
+    <label>Partner father’s name<input type="text" name="m_father_name" required maxlength="160" value="<?= bm_h((string)($m['father_name'] ?? '')) ?>"></label>
+    <label>Partner contact<input type="tel" name="m_contact_mobile" required maxlength="15" value="<?= bm_h((string)($m['mobile'] ?? '')) ?>"></label>
+    <label class="span-2">Partner district<input type="text" name="m_district" required maxlength="120" value="<?= bm_h(bm_player_address($m)) ?>"></label>
     <?php endif; ?>
 
     <div class="form-actions span-2">

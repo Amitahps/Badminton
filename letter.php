@@ -218,7 +218,7 @@ if ($fmt === 'csv') {
                     $rowOut[] = bm_team_is_free($team) ? 'Free' : '';
                 }
                 if (bm_letter_shows($letterFields, 'contact')) {
-                    $rowOut[] = (string)(($parentMeta[(int)$p['id']]['contact_mobile'] ?? '') ?: '');
+                    $rowOut[] = bm_player_contact($p, $parentMeta[(int)$p['id']] ?? []);
                 }
                 if (bm_letter_shows($letterFields, 'utr')) {
                     $rowOut[] = (string)(($parentMeta[(int)$p['id']]['payment_utr'] ?? '') ?: '');
@@ -302,7 +302,7 @@ require __DIR__ . '/includes/header.php';
       <?php endforeach; ?>
     </fieldset>
     <?php else: ?>
-    <p class="hint">Extra columns (gender, BAI, PBA, Aadhaar, date of birth, address, free entry, contact, payment reference) are the same as the official letter. Tick them there.</p>
+    <p class="hint">Extra columns (gender, BAI, PBA, Aadhaar, date of birth, district, free entry, contact, payment reference) are the same as the official letter. Tick them there.</p>
     <?php endif; ?>
     <div class="form-actions">
       <button type="submit" name="save_letter" value="1" class="btn btn-primary"><?= $forParents ? 'Save parents &amp; coaches letter' : 'Save letter edits' ?></button>
@@ -363,7 +363,7 @@ require __DIR__ . '/includes/header.php';
                   <td><?= bm_team_is_free($team) ? 'Free' : '—' ?></td>
                 <?php endif; ?>
                 <?php if (bm_letter_shows($letterFields, 'contact')): ?>
-                  <td><?= bm_h(trim((string)($parentMeta[(int)$p['id']]['contact_mobile'] ?? '')) !== '' ? (string)$parentMeta[(int)$p['id']]['contact_mobile'] : '—') ?></td>
+                  <td><?= bm_h(($ct = bm_player_contact($p, $parentMeta[(int)$p['id']] ?? [])) !== '' ? $ct : '—') ?></td>
                 <?php endif; ?>
                 <?php if (bm_letter_shows($letterFields, 'utr')): ?>
                   <td><?= bm_h(trim((string)($parentMeta[(int)$p['id']]['payment_utr'] ?? '')) !== '' ? (string)$parentMeta[(int)$p['id']]['payment_utr'] : '—') ?></td>

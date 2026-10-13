@@ -163,6 +163,7 @@ require __DIR__ . '/includes/header.php';
   </div>
   <div class="page-actions">
     <a class="btn btn-primary" href="tournament-entries.php?tournament_id=<?= $id ?>">Assign players / categories / events</a>
+    <a class="btn" href="parent-verify.php?tournament_id=<?= $id ?>">Verify / print / Excel</a>
     <a class="btn" href="letter.php?id=<?= $id ?>">Share letter PDF</a>
     <a class="btn" href="letter.php?id=<?= $id ?>&amp;for=parents">Share parents &amp; coaches PDF</a>
     <a class="btn" href="letter-select.php?tournament_id=<?= $id ?>">Select teams &amp; export letter</a>
@@ -178,7 +179,7 @@ require __DIR__ . '/includes/header.php';
     <button type="button" class="btn btn-primary" id="copy-parent-link">Copy link</button>
   </div>
   <?php if ($parentRows): ?>
-  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Edit, confirm paid, or remove. Share <a href="letter.php?id=<?= $id ?>">one official letter PDF</a> or <a href="letter.php?id=<?= $id ?>&amp;for=parents">one parents &amp; coaches PDF</a> — not a file per parent. Pending paid entries stay off the letter until Confirm paid.</p>
+  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Edit, confirm paid, or remove. <a href="parent-verify.php?tournament_id=<?= $id ?>">Verify, print or Excel</a> with filters. Share <a href="letter.php?id=<?= $id ?>">one official letter PDF</a> or <a href="letter.php?id=<?= $id ?>&amp;for=parents">one parents &amp; coaches PDF</a> — not a file per parent. Pending paid entries stay off the letter until Confirm paid.</p>
   <table class="table">
     <thead><tr><th>When</th><th>Player</th><th>Father</th><th>Contact</th><th>Age</th><th>Events</th><th>Payment</th><th></th></tr></thead>
     <tbody>

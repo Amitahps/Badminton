@@ -107,6 +107,7 @@ function bm_init_schema(PDO $pdo): void
             dob TEXT,
             dob_certificate_file TEXT,
             mobile TEXT,
+            father_name TEXT,
             remarks TEXT,
             address TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
@@ -386,6 +387,9 @@ function bm_migrate_schema(PDO $pdo): void
         if (!bm_column_exists($pdo, 'players', 'address')) {
             $pdo->exec('ALTER TABLE players ADD COLUMN address TEXT');
         }
+        if (!bm_column_exists($pdo, 'players', 'father_name')) {
+            $pdo->exec('ALTER TABLE players ADD COLUMN father_name TEXT');
+        }
         if (bm_column_exists($pdo, 'players', 'remarks')) {
             $pdo->exec("UPDATE players SET address = remarks WHERE (address IS NULL OR TRIM(address) = '') AND remarks IS NOT NULL AND TRIM(remarks) != ''");
         }
@@ -430,6 +434,12 @@ function bm_migrate_schema(PDO $pdo): void
             if (!bm_column_exists($pdo, 'parent_submissions', $col)) {
                 $pdo->exec('ALTER TABLE parent_submissions ADD COLUMN ' . $col . ' ' . $decl);
             }
+        }
+        try {
+            $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_parent_payment_utr ON parent_submissions(payment_utr) WHERE payment_utr IS NOT NULL AND TRIM(payment_utr) != ''");
+            $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_parent_payment_shot ON parent_submissions(payment_screenshot_hash) WHERE payment_screenshot_hash IS NOT NULL AND TRIM(payment_screenshot_hash) != ''");
+        } catch (Throwable $e) {
+            // Keep going if older duplicate rows block the unique index.
         }
     }
 }

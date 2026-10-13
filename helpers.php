@@ -191,7 +191,16 @@ function bm_clean_aadhaar(string $v): string
     return preg_replace('/\D+/', '', $v) ?? '';
 }
 
-/** Address from the player form (falls back to older remarks text). */
+/** Mobile from the player row, else the parent submission contact. */
+function bm_player_contact(array $player, array $parentRow = []): string
+{
+    $own = trim((string)($player['mobile'] ?? ''));
+    if ($own !== '') {
+        return $own;
+    }
+    return trim((string)($parentRow['contact_mobile'] ?? ''));
+}
+
 function bm_player_address(array $player): string
 {
     $address = trim((string)($player['address'] ?? ''));
@@ -353,7 +362,7 @@ function bm_letter_field_defs(): array
         'pba' => 'PBA ID',
         'aadhaar' => 'Aadhaar',
         'dob' => 'Date of birth',
-        'address' => 'Address',
+        'address' => 'District',
         'free' => 'Free entry',
         'contact' => 'Contact',
         'utr' => 'Payment reference',

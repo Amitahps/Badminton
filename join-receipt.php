@@ -47,9 +47,11 @@ $blockPlayer = static function (string $title, array $pl): void {
     echo '<tr><th>Name</th><td>' . bm_h((string)($pl['full_name'] ?? '')) . '</td></tr>';
     echo '<tr><th>Gender</th><td>' . bm_h(bm_gender_label((string)($pl['gender'] ?? ''))) . '</td></tr>';
     echo '<tr><th>BAI ID</th><td>' . bm_h(trim((string)($pl['bai_id'] ?? '')) !== '' ? (string)$pl['bai_id'] : '—') . '</td></tr>';
-    echo '<tr><th>PBA ID</th><td>' . bm_h(trim((string)($pl['pbi_id'] ?? '')) !== '' ? (string)$pl['pbi_id'] : '—') . '</td></tr>';
+    echo '<tr><th>PBI ID</th><td>' . bm_h(trim((string)($pl['pbi_id'] ?? '')) !== '' ? (string)$pl['pbi_id'] : '—') . '</td></tr>';
+    echo '<tr><th>Father’s name</th><td>' . bm_h(trim((string)($pl['father_name'] ?? '')) !== '' ? (string)$pl['father_name'] : '—') . '</td></tr>';
+    echo '<tr><th>Contact</th><td>' . bm_h(trim((string)($pl['mobile'] ?? '')) !== '' ? (string)$pl['mobile'] : '—') . '</td></tr>';
     $addr = bm_player_address($pl);
-    echo '<tr><th>Address</th><td>' . bm_h($addr !== '' ? $addr : '—') . '</td></tr>';
+    echo '<tr><th>District</th><td>' . bm_h($addr !== '' ? $addr : '—') . '</td></tr>';
     echo '</tbody></table></section>';
 };
 ?>
@@ -79,7 +81,7 @@ $blockPlayer = static function (string $title, array $pl): void {
   <h1 style="font-size:1.35rem;margin:0 0 0.6rem;"><?= bm_h($tournament['name']) ?></h1>
   <p>Held at <strong><?= bm_h($tournament['held_at']) ?></strong><br>
      Dates: <strong><?= bm_h($dateText) ?></strong></p>
-  <p>This is the entry submitted for this tournament. Please cross-check name, age category, events, BAI ID, PBA ID and address with the tournament list.</p>
+  <p>This is the entry submitted for this tournament. Please cross-check name, age category, events, BAI ID, PBI ID, father, contact and district with the tournament list.</p>
   <p><strong>Age category:</strong> <?= bm_h((string)($cat['name'] ?? '')) ?><br>
      <strong>Events:</strong> <?= bm_h(implode(', ', $eventLabels)) ?></p>
 
