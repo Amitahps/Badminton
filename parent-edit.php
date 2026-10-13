@@ -29,6 +29,16 @@ if (!$sub) {
 
 $redir = 'tournament.php?id=' . (int)$tournament['id'];
 
+if (isset($_POST['confirm_paid'])) {
+    try {
+        bm_parent_confirm_paid($pdo, $sub);
+        bm_flash('success', 'Payment confirmed. This entry is now on the letter.');
+    } catch (Throwable $e) {
+        bm_flash('error', $e->getMessage());
+    }
+    bm_redirect($redir);
+}
+
 if (isset($_POST['delete_parent'])) {
     try {
         bm_parent_delete_submission($pdo, $sub);
@@ -77,6 +87,13 @@ if (isset($_POST['save_parent_edit'])) {
         foreach (bm_parent_submission_team_ids($pdo, $sub) as $teamId) {
             bm_parent_refresh_team_label($pdo, $teamId);
         }
+        $father = trim((string)($_POST['father_name'] ?? ''));
+        $mobile = trim((string)($_POST['contact_mobile'] ?? ''));
+        if ($mobile !== '') {
+            $mobile = bm_normalize_mobile($mobile);
+        }
+        $pdo->prepare('UPDATE parent_submissions SET father_name=?, contact_mobile=? WHERE id=?')
+            ->execute([$father !== '' ? $father : null, $mobile !== '' ? $mobile : null, (int)$sub['id']]);
         bm_flash('success', 'Parent entry updated. Letter and Excel will use the new details.');
         bm_redirect($redir);
     } catch (Throwable $e) {
@@ -111,8 +128,15 @@ require __DIR__ . '/includes/header.php';
 <section class="panel">
   <p><strong>Age category:</strong> <?= bm_h((string)(($sub['category']['name'] ?? ''))) ?></p>
   <p><strong>Events:</strong> <?= bm_h(implode(', ', $eventLabels)) ?></p>
+  <p><strong>Payment:</strong> <?= bm_h(bm_parent_payment_label((string)($sub['payment_status'] ?? ''), (int)($sub['payment_amount'] ?? 0))) ?>
+    <?php if (trim((string)($sub['payment_utr'] ?? '')) !== ''): ?> · UTR <?= bm_h((string)$sub['payment_utr']) ?><?php endif; ?>
+    <?php if (!empty($sub['payment_screenshot'])): ?> · <a href="view-file.php?f=<?= bm_h(urlencode((string)$sub['payment_screenshot'])) ?>" target="_blank">Screenshot</a><?php endif; ?>
+  </p>
   <form method="post" class="form form-grid">
     <input type="hidden" name="id" value="<?= $id ?>">
+    <p class="hint span-2">Parent / coach</p>
+    <label>Father’s name<input type="text" name="father_name" maxlength="160" value="<?= bm_h((string)($sub['father_name'] ?? '')) ?>"></label>
+    <label>Contact number<input type="tel" name="contact_mobile" maxlength="15" value="<?= bm_h((string)($sub['contact_mobile'] ?? '')) ?>"></label>
     <p class="hint span-2">Player</p>
     <label>Player name<input type="text" name="full_name" required maxlength="160" value="<?= bm_h((string)($p['full_name'] ?? '')) ?>"></label>
     <label>Gender
@@ -143,6 +167,9 @@ require __DIR__ . '/includes/header.php';
 
     <div class="form-actions span-2">
       <button type="submit" name="save_parent_edit" value="1" class="btn btn-primary">Save changes</button>
+      <?php if (($sub['payment_status'] ?? '') === 'pending'): ?>
+      <button type="submit" name="confirm_paid" value="1" class="btn">Confirm paid</button>
+      <?php endif; ?>
       <button type="submit" name="delete_parent" value="1" class="btn btn-danger" onclick="return confirm('Remove this parent entry from the tournament, letter and Excel?');">Remove entry</button>
     </div>
   </form>

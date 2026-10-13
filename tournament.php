@@ -13,7 +13,17 @@ if (!$tournament) {
     bm_redirect('tournaments.php');
 }
 
-$categories = $pdo->query('SELECT * FROM age_categories ORDER BY sort_order, name')->fetchAll();
+$categories = bm_tournament_categories($pdo, $id);
+
+if (isset($_POST['confirm_paid'])) {
+    $sid = (int)($_POST['confirm_paid'] ?? 0);
+    $sub = bm_parent_load_by_id($pdo, $sid, $id);
+    if ($sub) {
+        bm_parent_confirm_paid($pdo, $sub);
+        bm_flash('success', 'Payment confirmed. This entry is now on the letter.');
+    }
+    bm_redirect('tournament.php?id=' . $id);
+}
 
 $ecStmt = $pdo->prepare('SELECT COUNT(DISTINCT player_id) FROM tournament_entries WHERE tournament_id = ?');
 $ecStmt->execute([$id]);
@@ -129,7 +139,9 @@ foreach ($categories as $c) {
 $publicToken = bm_tournament_ensure_public_token($pdo, $tournament);
 $parentLink = bm_join_url($publicToken);
 $parentSubs = $pdo->prepare("
-    SELECT s.id, s.created_at, s.event_codes, s.receipt_code, c.name AS category_name, p.full_name
+    SELECT s.id, s.created_at, s.event_codes, s.receipt_code, s.father_name, s.contact_mobile,
+           s.payment_status, s.payment_amount, s.payment_utr, s.payment_screenshot,
+           c.name AS category_name, p.full_name
     FROM parent_submissions s
     JOIN age_categories c ON c.id = s.age_category_id
     JOIN players p ON p.id = s.primary_player_id
@@ -160,20 +172,22 @@ require __DIR__ . '/includes/header.php';
 
 <section class="panel">
   <div class="panel-head"><h2>Parent entry link</h2></div>
-  <p class="lede">Send this link to parents. They fill one age category, then events. Doubles / Mix Double ask for a partner. Their save goes into the letter and Excel. The old assign-players method still works as before.</p>
+  <p class="lede">Send this link to parents and coaches. They only see this tournament’s age categories. After save they get a PDF of every player they sent, and can edit mistakes. Assign-players still works as before.</p>
   <div class="share-link">
     <input id="parent-link" type="text" readonly value="<?= bm_h($parentLink) ?>">
     <button type="button" class="btn btn-primary" id="copy-parent-link">Copy link</button>
   </div>
   <?php if ($parentRows): ?>
-  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Edit or remove any entry. Share <a href="letter.php?id=<?= $id ?>">one official letter PDF</a> or <a href="letter.php?id=<?= $id ?>&amp;for=parents">one parents &amp; coaches PDF</a> — not a file per parent.</p>
+  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Edit, confirm paid, or remove. Share <a href="letter.php?id=<?= $id ?>">one official letter PDF</a> or <a href="letter.php?id=<?= $id ?>&amp;for=parents">one parents &amp; coaches PDF</a> — not a file per parent. Pending paid entries stay off the letter until Confirm paid.</p>
   <table class="table">
-    <thead><tr><th>When</th><th>Player</th><th>Age</th><th>Events</th><th></th></tr></thead>
+    <thead><tr><th>When</th><th>Player</th><th>Father</th><th>Contact</th><th>Age</th><th>Events</th><th>Payment</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($parentRows as $ps): ?>
       <tr>
         <td><?= bm_h((string)$ps['created_at']) ?></td>
         <td><?= bm_h((string)$ps['full_name']) ?></td>
+        <td><?= bm_h((string)($ps['father_name'] ?? '')) ?></td>
+        <td><?= bm_h((string)($ps['contact_mobile'] ?? '')) ?></td>
         <td><?= bm_h((string)$ps['category_name']) ?></td>
         <td><?php
           $labs = [];
@@ -185,8 +199,22 @@ require __DIR__ . '/includes/header.php';
           }
           echo bm_h(implode(', ', $labs));
         ?></td>
+        <td>
+          <?= bm_h(bm_parent_payment_label((string)($ps['payment_status'] ?? ''), (int)($ps['payment_amount'] ?? 0))) ?>
+          <?php if (trim((string)($ps['payment_utr'] ?? '')) !== ''): ?>
+            <div class="muted">UTR <?= bm_h((string)$ps['payment_utr']) ?></div>
+          <?php endif; ?>
+          <?php if (!empty($ps['payment_screenshot'])): ?>
+            <div><a href="view-file.php?f=<?= bm_h(urlencode((string)$ps['payment_screenshot'])) ?>" target="_blank">Screenshot</a></div>
+          <?php endif; ?>
+        </td>
         <td class="right actions">
           <a class="btn btn-sm" href="parent-edit.php?id=<?= (int)$ps['id'] ?>">Edit</a>
+          <?php if (($ps['payment_status'] ?? '') === 'pending'): ?>
+          <form method="post" class="inline">
+            <button type="submit" name="confirm_paid" value="<?= (int)$ps['id'] ?>" class="btn btn-sm btn-primary">Confirm paid</button>
+          </form>
+          <?php endif; ?>
           <form method="post" action="parent-edit.php" class="inline" onsubmit="return confirm('Remove this parent entry from the tournament, letter and Excel?');">
             <input type="hidden" name="id" value="<?= (int)$ps['id'] ?>">
             <button type="submit" name="delete_parent" value="1" class="btn btn-sm btn-danger">Remove</button>

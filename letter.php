@@ -99,6 +99,7 @@ if ($letterBody === '') {
 }
 $letterGreeting = $forParents ? 'Dear Parents and Coaches,' : 'Sir/Madam,';
 $letterFields = bm_letter_fields_enabled($tournament['letter_columns'] ?? null);
+$parentMeta = bm_tournament_parent_meta_by_player($pdo, $id);
 
 // Only teams ticked for letter
 $teamRows = $pdo->prepare("
@@ -216,6 +217,12 @@ if ($fmt === 'csv') {
                 if (bm_letter_shows($letterFields, 'free')) {
                     $rowOut[] = bm_team_is_free($team) ? 'Free' : '';
                 }
+                if (bm_letter_shows($letterFields, 'contact')) {
+                    $rowOut[] = (string)(($parentMeta[(int)$p['id']]['contact_mobile'] ?? '') ?: '');
+                }
+                if (bm_letter_shows($letterFields, 'utr')) {
+                    $rowOut[] = (string)(($parentMeta[(int)$p['id']]['payment_utr'] ?? '') ?: '');
+                }
                 fputcsv($out, $rowOut);
             }
         }
@@ -295,7 +302,7 @@ require __DIR__ . '/includes/header.php';
       <?php endforeach; ?>
     </fieldset>
     <?php else: ?>
-    <p class="hint">Extra columns (gender, BAI, PBA, Aadhaar, date of birth, address, free entry) are the same as the official letter. Tick them there.</p>
+    <p class="hint">Extra columns (gender, BAI, PBA, Aadhaar, date of birth, address, free entry, contact, payment reference) are the same as the official letter. Tick them there.</p>
     <?php endif; ?>
     <div class="form-actions">
       <button type="submit" name="save_letter" value="1" class="btn btn-primary"><?= $forParents ? 'Save parents &amp; coaches letter' : 'Save letter edits' ?></button>
@@ -354,6 +361,12 @@ require __DIR__ . '/includes/header.php';
                 <?php endif; ?>
                 <?php if (bm_letter_shows($letterFields, 'free')): ?>
                   <td><?= bm_team_is_free($team) ? 'Free' : '—' ?></td>
+                <?php endif; ?>
+                <?php if (bm_letter_shows($letterFields, 'contact')): ?>
+                  <td><?= bm_h(trim((string)($parentMeta[(int)$p['id']]['contact_mobile'] ?? '')) !== '' ? (string)$parentMeta[(int)$p['id']]['contact_mobile'] : '—') ?></td>
+                <?php endif; ?>
+                <?php if (bm_letter_shows($letterFields, 'utr')): ?>
+                  <td><?= bm_h(trim((string)($parentMeta[(int)$p['id']]['payment_utr'] ?? '')) !== '' ? (string)$parentMeta[(int)$p['id']]['payment_utr'] : '—') ?></td>
                 <?php endif; ?>
               </tr>
               <?php endforeach; ?>

@@ -23,9 +23,11 @@ if (isset($_POST['delete_id'])) {
 
 $rows = $pdo->query("
     SELECT c.*,
+      t.name AS tournament_name,
       (SELECT COUNT(DISTINCT e.player_id) FROM tournament_entries e WHERE e.age_category_id = c.id) AS entry_count
     FROM age_categories c
-    ORDER BY c.sort_order ASC, c.name ASC
+    LEFT JOIN tournaments t ON t.id = c.tournament_id
+    ORDER BY IFNULL(c.tournament_id,0), c.sort_order ASC, c.name ASC
 ")->fetchAll();
 
 $pageTitle = 'Age Categories · Badminton';
@@ -42,12 +44,13 @@ require __DIR__ . '/includes/header.php';
 <section class="panel">
   <?php if ($rows): ?>
   <table class="table">
-    <thead><tr><th>Order</th><th>Category</th><th>For</th><th>Age group</th><th>Tournament entries</th><th></th></tr></thead>
+    <thead><tr><th>Order</th><th>Category</th><th>Tournament</th><th>For</th><th>Age group</th><th>Tournament entries</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($rows as $r): ?>
       <tr>
         <td><?= (int)$r['sort_order'] ?></td>
         <td><strong><?= bm_h($r['name']) ?></strong></td>
+        <td><?= (int)($r['tournament_id'] ?? 0) > 0 ? bm_h((string)($r['tournament_name'] ?? '')) : 'All (legacy)' ?></td>
         <td><?= bm_h(bm_gender_scope_label((string)($r['gender_scope'] ?? 'open'))) ?></td>
         <td><?= bm_h($r['age_group'] ?: '—') ?></td>
         <td><?= (int)$r['entry_count'] ?></td>

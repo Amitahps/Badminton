@@ -355,6 +355,8 @@ function bm_letter_field_defs(): array
         'dob' => 'Date of birth',
         'address' => 'Address',
         'free' => 'Free entry',
+        'contact' => 'Contact',
+        'utr' => 'Payment reference',
     ];
 }
 
@@ -400,6 +402,100 @@ function bm_letter_fields_from_post(array $post): string
 function bm_letter_shows(array $enabled, string $key): bool
 {
     return in_array($key, $enabled, true);
+}
+
+function bm_tournament_is_paid(array $tournament): bool
+{
+    return (int)($tournament['is_paid'] ?? 0) === 1;
+}
+
+/** @return list<array<string,mixed>> */
+function bm_tournament_categories(PDO $pdo, int $tournamentId): array
+{
+    if ($tournamentId > 0) {
+        $st = $pdo->prepare('SELECT * FROM age_categories WHERE tournament_id = ? ORDER BY sort_order, name');
+        $st->execute([$tournamentId]);
+        $rows = $st->fetchAll();
+        if ($rows) {
+            return $rows;
+        }
+    }
+    return $pdo->query('SELECT * FROM age_categories WHERE IFNULL(tournament_id,0) = 0 ORDER BY sort_order, name')->fetchAll();
+}
+
+/** @return list<string> */
+function bm_tournament_age_group_labels(PDO $pdo, int $tournamentId): array
+{
+    $st = $pdo->prepare("
+        SELECT age_group FROM age_categories
+        WHERE tournament_id = ? AND TRIM(IFNULL(age_group,'')) != ''
+        GROUP BY age_group
+        ORDER BY MIN(sort_order), age_group
+    ");
+    $st->execute([$tournamentId]);
+    return array_values(array_filter(array_map('strval', array_column($st->fetchAll(), 'age_group'))));
+}
+
+/**
+ * @param list<string> $groups
+ */
+function bm_ensure_tournament_age_groups(PDO $pdo, int $tournamentId, array $groups): void
+{
+    $clean = [];
+    foreach ($groups as $g) {
+        $g = trim((string)$g);
+        if ($g !== '' && !in_array($g, $clean, true)) {
+            $clean[] = $g;
+        }
+    }
+    if (!$clean) {
+        return;
+    }
+    $sortSt = $pdo->prepare('SELECT IFNULL(MAX(sort_order),0) FROM age_categories WHERE tournament_id=?');
+    $sortSt->execute([$tournamentId]);
+    $sort = (int)$sortSt->fetchColumn();
+    foreach ($clean as $group) {
+        foreach ([['boys', 'Boys'], ['girls', 'Girls']] as $pair) {
+            $name = $group . ' ' . $pair[1];
+            $find = $pdo->prepare('SELECT id FROM age_categories WHERE tournament_id=? AND LOWER(name)=LOWER(?) LIMIT 1');
+            $find->execute([$tournamentId, $name]);
+            if ($find->fetch()) {
+                continue;
+            }
+            $sort += 10;
+            $pdo->prepare('INSERT INTO age_categories (tournament_id, name, sort_order, gender_scope, age_group) VALUES (?,?,?,?,?)')
+                ->execute([$tournamentId, $name, $sort, $pair[0], $group]);
+        }
+    }
+}
+
+function bm_event_fee_amount(array $tournament, string $eventCode): int
+{
+    if ($eventCode === 'single') {
+        return max(0, (int)($tournament['fee_single'] ?? 0));
+    }
+    if ($eventCode === 'double_men' || $eventCode === 'double_girls') {
+        return max(0, (int)($tournament['fee_double'] ?? 0));
+    }
+    if ($eventCode === 'mix_double') {
+        return max(0, (int)($tournament['fee_mix'] ?? 0));
+    }
+    return 0;
+}
+
+/** @param list<string> $eventCodes */
+function bm_parent_fee_total(array $tournament, array $eventCodes): int
+{
+    $sum = 0;
+    foreach ($eventCodes as $code) {
+        $sum += bm_event_fee_amount($tournament, (string)$code);
+    }
+    return $sum;
+}
+
+function bm_rupees(int $n): string
+{
+    return '₹' . number_format($n, 0, '.', '');
 }
 
 require_once __DIR__ . '/parent-entry.php';

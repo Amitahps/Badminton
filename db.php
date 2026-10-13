@@ -84,12 +84,14 @@ function bm_init_schema(PDO $pdo): void
 
         CREATE TABLE IF NOT EXISTS age_categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
+            tournament_id INTEGER NOT NULL DEFAULT 0,
+            name TEXT NOT NULL,
             sort_order INTEGER NOT NULL DEFAULT 0,
             notes TEXT,
             gender_scope TEXT NOT NULL DEFAULT 'open',
             age_group TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE (tournament_id, name)
         );
 
         CREATE TABLE IF NOT EXISTS players (
@@ -131,6 +133,12 @@ function bm_init_schema(PDO $pdo): void
             letter_parents_subject TEXT,
             letter_parents_body TEXT,
             public_token TEXT,
+            is_paid INTEGER NOT NULL DEFAULT 0,
+            fee_single INTEGER NOT NULL DEFAULT 0,
+            fee_double INTEGER NOT NULL DEFAULT 0,
+            fee_mix INTEGER NOT NULL DEFAULT 0,
+            upi_id TEXT,
+            qr_file TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
@@ -194,6 +202,14 @@ function bm_init_schema(PDO $pdo): void
             single_team_id INTEGER,
             double_team_id INTEGER,
             mix_team_id INTEGER,
+            father_name TEXT,
+            contact_mobile TEXT,
+            parent_code TEXT,
+            payment_status TEXT NOT NULL DEFAULT 'na',
+            payment_amount INTEGER NOT NULL DEFAULT 0,
+            payment_utr TEXT,
+            payment_screenshot TEXT,
+            payment_screenshot_hash TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
             FOREIGN KEY (age_category_id) REFERENCES age_categories(id) ON DELETE RESTRICT,
@@ -268,6 +284,8 @@ function bm_migrate_schema(PDO $pdo): void
         }
     }
 
+    bm_migrate_age_categories_tournament_id($pdo);
+
     if (bm_table_exists($pdo, 'age_categories')) {
         if (!bm_column_exists($pdo, 'age_categories', 'gender_scope')) {
             $pdo->exec("ALTER TABLE age_categories ADD COLUMN gender_scope TEXT NOT NULL DEFAULT 'open'");
@@ -333,6 +351,24 @@ function bm_migrate_schema(PDO $pdo): void
         if (!bm_column_exists($pdo, 'tournaments', 'public_token')) {
             $pdo->exec('ALTER TABLE tournaments ADD COLUMN public_token TEXT');
         }
+        if (!bm_column_exists($pdo, 'tournaments', 'is_paid')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 0');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'fee_single')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN fee_single INTEGER NOT NULL DEFAULT 0');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'fee_double')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN fee_double INTEGER NOT NULL DEFAULT 0');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'fee_mix')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN fee_mix INTEGER NOT NULL DEFAULT 0');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'upi_id')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN upi_id TEXT');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'qr_file')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN qr_file TEXT');
+        }
     }
 
     if (bm_table_exists($pdo, 'tournament_teams') && !bm_column_exists($pdo, 'tournament_teams', 'include_in_letter')) {
@@ -380,7 +416,60 @@ function bm_migrate_schema(PDO $pdo): void
                 $pdo->exec('ALTER TABLE parent_submissions ADD COLUMN ' . $col . ' INTEGER');
             }
         }
+        $parentCols = [
+            'father_name' => 'TEXT',
+            'contact_mobile' => 'TEXT',
+            'parent_code' => 'TEXT',
+            'payment_status' => "TEXT NOT NULL DEFAULT 'na'",
+            'payment_amount' => 'INTEGER NOT NULL DEFAULT 0',
+            'payment_utr' => 'TEXT',
+            'payment_screenshot' => 'TEXT',
+            'payment_screenshot_hash' => 'TEXT',
+        ];
+        foreach ($parentCols as $col => $decl) {
+            if (!bm_column_exists($pdo, 'parent_submissions', $col)) {
+                $pdo->exec('ALTER TABLE parent_submissions ADD COLUMN ' . $col . ' ' . $decl);
+            }
+        }
     }
+}
+
+function bm_migrate_age_categories_tournament_id(PDO $pdo): void
+{
+    if (!bm_table_exists($pdo, 'age_categories') || bm_column_exists($pdo, 'age_categories', 'tournament_id')) {
+        return;
+    }
+    $pdo->exec('PRAGMA foreign_keys = OFF');
+    $pdo->exec("
+        CREATE TABLE age_categories__t (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tournament_id INTEGER NOT NULL DEFAULT 0,
+            name TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            notes TEXT,
+            gender_scope TEXT NOT NULL DEFAULT 'open',
+            age_group TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE (tournament_id, name)
+        )
+    ");
+    $rows = $pdo->query('SELECT * FROM age_categories')->fetchAll();
+    $ins = $pdo->prepare('INSERT INTO age_categories__t (id, tournament_id, name, sort_order, notes, gender_scope, age_group, created_at) VALUES (?,?,?,?,?,?,?,?)');
+    foreach ($rows as $r) {
+        $ins->execute([
+            (int)$r['id'],
+            0,
+            (string)$r['name'],
+            (int)($r['sort_order'] ?? 0),
+            $r['notes'] ?? null,
+            (string)($r['gender_scope'] ?? 'open') ?: 'open',
+            $r['age_group'] ?? null,
+            (string)($r['created_at'] ?? date('Y-m-d H:i:s')),
+        ]);
+    }
+    $pdo->exec('DROP TABLE age_categories');
+    $pdo->exec('ALTER TABLE age_categories__t RENAME TO age_categories');
+    $pdo->exec('PRAGMA foreign_keys = ON');
 }
 
 /** Events assigned to a player inside one tournament. */
@@ -673,8 +762,14 @@ function bm_paired_category_ids(PDO $pdo, array $category): array
     if ($group === '') {
         return [$id];
     }
-    $st = $pdo->prepare('SELECT id FROM age_categories WHERE age_group = ?');
-    $st->execute([$group]);
+    $tid = (int)($category['tournament_id'] ?? 0);
+    if ($tid > 0) {
+        $st = $pdo->prepare('SELECT id FROM age_categories WHERE age_group = ? AND tournament_id = ?');
+        $st->execute([$group, $tid]);
+    } else {
+        $st = $pdo->prepare('SELECT id FROM age_categories WHERE age_group = ? AND IFNULL(tournament_id,0) = 0');
+        $st->execute([$group]);
+    }
     $ids = array_map('intval', array_column($st->fetchAll(), 'id'));
     return $ids ?: [$id];
 }

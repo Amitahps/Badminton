@@ -106,7 +106,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow"><?= bm_h($tournament['name']) ?> · <?= bm_h($tournament['held_at']) ?> · <?= bm_h($dateText) ?></p>
     <h1>Select teams for letter</h1>
-    <p class="lede">Tick <strong>all</strong> or only a <strong>few</strong> teams. Only selected teams will appear in the one letter / PDF / CSV. Extra columns (gender, BAI, PBA, Aadhaar, date of birth, address, free entry) appear only if you tick them.</p>
+    <p class="lede">Tick <strong>all</strong> or only a <strong>few</strong> teams. Only selected teams will appear in the one letter / PDF / CSV. Extra columns (gender, BAI, PBA, Aadhaar, date of birth, address, free entry, contact, payment reference) appear only if you tick them.</p>
   </div>
   <div class="page-actions">
     <a class="btn" href="letter.php?id=<?= $id ?>">Open letter PDF</a>

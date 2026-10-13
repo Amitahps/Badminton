@@ -14,19 +14,30 @@ if (!$tournament) {
     exit;
 }
 
-$ageOptions = bm_parent_age_options($pdo);
+$ageOptions = bm_parent_age_options($pdo, (int)$tournament['id']);
 $dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
+$parentCode = bm_own_parent_code($token);
 $ownReceipt = bm_own_parent_receipt($token);
+$isPaid = bm_tournament_is_paid($tournament);
+$ctx = [];
+if ($parentCode !== '') {
+    $mine = bm_parent_submissions_for_code($pdo, (int)$tournament['id'], $parentCode);
+    if ($mine) {
+        $ctx['father_name'] = (string)($mine[0]['father_name'] ?? '');
+        $ctx['contact_mobile'] = (string)($mine[0]['contact_mobile'] ?? '');
+    }
+}
 
 if (isset($_POST['save_parent'])) {
     try {
         if (!$ageOptions) {
             throw new RuntimeException('Age categories are not set up yet. Ask the organiser.');
         }
-        $result = bm_parent_save_submission($pdo, $tournament, $_POST);
+        $result = bm_parent_save_submission($pdo, $tournament, $_POST, $_FILES);
         bm_remember_parent_receipt($token, $result['receipt']);
-        bm_flash('success', 'Saved. This copy is only for you — other parents cannot see it.');
-        bm_redirect('join-receipt.php?t=' . rawurlencode($token) . '&r=' . rawurlencode($result['receipt']));
+        bm_remember_parent_code($token, (string)$result['parent_code']);
+        bm_flash('success', 'Saved. Open your PDF for every player you have sent. Other parents cannot see it.');
+        bm_redirect('join-mine.php?t=' . rawurlencode($token) . '&p=' . rawurlencode((string)$result['parent_code']));
     } catch (Throwable $e) {
         bm_flash('error', $e->getMessage());
     }
@@ -34,6 +45,8 @@ if (isset($_POST['save_parent'])) {
 
 $form = [
     'age_key' => (string)($_POST['age_key'] ?? ''),
+    'father_name' => (string)($_POST['father_name'] ?? $ctx['father_name'] ?? ''),
+    'contact_mobile' => (string)($_POST['contact_mobile'] ?? $ctx['contact_mobile'] ?? ''),
     'full_name' => (string)($_POST['full_name'] ?? ''),
     'gender' => (string)($_POST['gender'] ?? ''),
     'bai_id' => (string)($_POST['bai_id'] ?? ''),
@@ -48,6 +61,7 @@ $form = [
     'm_bai_id' => (string)($_POST['m_bai_id'] ?? ''),
     'm_pbi_id' => (string)($_POST['m_pbi_id'] ?? ''),
     'm_address' => (string)($_POST['m_address'] ?? ''),
+    'payment_utr' => (string)($_POST['payment_utr'] ?? ''),
 ];
 
 $pageTitle = $tournament['name'] . ' · Parent entry';
@@ -55,26 +69,39 @@ require __DIR__ . '/includes/header.php';
 ?>
 <section class="page-head">
   <div>
-    <p class="eyebrow">Parent entry</p>
+    <p class="eyebrow">Parent / coach entry</p>
     <h1><?= bm_h($tournament['name']) ?></h1>
-    <p class="lede">Held at <strong><?= bm_h($tournament['held_at']) ?></strong> on <strong><?= bm_h($dateText) ?></strong>. Fill <strong>one age category</strong> at a time. After save you will see only your own details — not other parents.</p>
+    <p class="lede">Held at <strong><?= bm_h($tournament['held_at']) ?></strong> on <strong><?= bm_h($dateText) ?></strong>. Fill <strong>one player / age category</strong> at a time. You can add more players after save. You will see only your own entries.</p>
   </div>
 </section>
 
-<?php if ($ownReceipt): ?>
+<?php if ($parentCode): ?>
+<p class="hint" style="margin-top:-0.5rem;"><a href="join-mine.php?t=<?= bm_h(urlencode($token)) ?>&amp;p=<?= bm_h(urlencode($parentCode)) ?>">View / print PDF of entries you already sent</a> (only yours).</p>
+<?php elseif ($ownReceipt): ?>
 <p class="hint" style="margin-top:-0.5rem;"><a href="join-receipt.php?t=<?= bm_h(urlencode($token)) ?>&amp;r=<?= bm_h(urlencode($ownReceipt)) ?>">View the details you already sent</a> (only yours).</p>
 <?php endif; ?>
 
 <?php if (!$ageOptions): ?>
 <section class="panel">
-  <p class="empty">Age categories are not ready. Please contact the organiser.</p>
+  <p class="empty">Age categories for this tournament are not ready. Please contact the organiser.</p>
 </section>
 <?php else: ?>
 <section class="panel">
-  <form method="post" class="form form-grid" id="parent-form">
+  <form method="post" class="form form-grid" id="parent-form" enctype="multipart/form-data">
     <input type="hidden" name="t" value="<?= bm_h($token) ?>">
+    <?php if ($parentCode): ?>
+    <input type="hidden" name="parent_code" value="<?= bm_h($parentCode) ?>">
+    <?php endif; ?>
 
-    <label class="span-2">1. Age category
+    <p class="hint span-2">1. Parent / coach</p>
+    <label>Father’s name
+      <input type="text" name="father_name" required maxlength="160" value="<?= bm_h($form['father_name']) ?>">
+    </label>
+    <label>Contact number
+      <input type="tel" name="contact_mobile" required maxlength="15" inputmode="numeric" value="<?= bm_h($form['contact_mobile']) ?>" placeholder="10-digit mobile">
+    </label>
+
+    <label class="span-2">2. Age category
       <select name="age_key" id="age_key" required>
         <option value="">Select age</option>
         <?php foreach ($ageOptions as $opt): ?>
@@ -83,7 +110,7 @@ require __DIR__ . '/includes/header.php';
       </select>
     </label>
 
-    <p class="hint span-2">2. Player details</p>
+    <p class="hint span-2">3. Player details</p>
     <label>Player name
       <input type="text" name="full_name" required maxlength="160" value="<?= bm_h($form['full_name']) ?>">
     </label>
@@ -99,19 +126,22 @@ require __DIR__ . '/includes/header.php';
     <label class="span-2">Address<textarea name="address" rows="2"><?= bm_h($form['address']) ?></textarea></label>
 
     <div id="event-box" class="event-pick-box">
-      <p class="hint">3. Events for this age (tick all that apply)</p>
+      <p class="hint">4. Events for this age (tick all that apply)</p>
       <div class="event-row">
         <input type="checkbox" class="ev" id="ev-single" name="events[]" value="single" <?= in_array('single', $form['events'], true) ? 'checked' : '' ?>>
-        <label for="ev-single">Single</label>
+        <label for="ev-single">Single<?php if ($isPaid && (int)$tournament['fee_single'] > 0): ?> <span class="muted">(<?= bm_h(bm_rupees((int)$tournament['fee_single'])) ?>)</span><?php endif; ?></label>
       </div>
       <div class="event-row">
         <input type="checkbox" class="ev" id="ev-double" name="events[]" value="double" <?= in_array('double', $form['events'], true) ? 'checked' : '' ?>>
-        <label for="ev-double" id="lab-double">Doubles</label>
+        <label for="ev-double" id="lab-double">Doubles<?php if ($isPaid && (int)$tournament['fee_double'] > 0): ?> <span class="muted">(<?= bm_h(bm_rupees((int)$tournament['fee_double'])) ?>)</span><?php endif; ?></label>
       </div>
       <div class="event-row">
         <input type="checkbox" class="ev" id="ev-mix" name="events[]" value="mix" <?= in_array('mix', $form['events'], true) ? 'checked' : '' ?>>
-        <label for="ev-mix">Mix Double</label>
+        <label for="ev-mix">Mix Double<?php if ($isPaid && (int)$tournament['fee_mix'] > 0): ?> <span class="muted">(<?= bm_h(bm_rupees((int)$tournament['fee_mix'])) ?>)</span><?php endif; ?></label>
       </div>
+      <?php if ($isPaid): ?>
+      <p class="fee-total" id="fee-total"></p>
+      <?php endif; ?>
     </div>
 
     <div id="double-box" class="partner-box">
@@ -134,6 +164,25 @@ require __DIR__ . '/includes/header.php';
       <label class="span-2">Partner address<textarea name="m_address" rows="2"><?= bm_h($form['m_address']) ?></textarea></label>
     </div>
 
+    <?php if ($isPaid): ?>
+    <div id="pay-box" class="partner-box pay-box">
+      <h2>Payment</h2>
+      <p class="hint">Pay the total by UPI, then enter the UTR / reference number (digits only) and upload the screenshot. Duplicate UTR or screenshot will not save.</p>
+      <?php if (trim((string)($tournament['upi_id'] ?? '')) !== ''): ?>
+        <p><strong>UPI:</strong> <?= bm_h((string)$tournament['upi_id']) ?></p>
+      <?php endif; ?>
+      <?php if (!empty($tournament['qr_file'])): ?>
+        <p><img class="qr-img" src="join-qr.php?t=<?= bm_h(urlencode($token)) ?>" alt="Payment QR"></p>
+      <?php endif; ?>
+      <label>UTR / reference number
+        <input type="text" name="payment_utr" id="payment_utr" inputmode="numeric" maxlength="18" pattern="[0-9]*" value="<?= bm_h($form['payment_utr']) ?>" placeholder="digits only">
+      </label>
+      <label>Payment screenshot
+        <input type="file" name="payment_screenshot" id="payment_screenshot" accept="image/png,image/jpeg,image/webp,application/pdf">
+      </label>
+    </div>
+    <?php endif; ?>
+
     <div class="form-actions">
       <button type="submit" name="save_parent" value="1" class="btn btn-primary">Save</button>
     </div>
@@ -145,6 +194,8 @@ require __DIR__ . '/includes/header.php';
   var evBox = document.getElementById('event-box');
   var dBox = document.getElementById('double-box');
   var mBox = document.getElementById('mix-box');
+  var payBox = document.getElementById('pay-box');
+  var evSingle = document.getElementById('ev-single');
   var evDouble = document.getElementById('ev-double');
   var evMix = document.getElementById('ev-mix');
   var labDouble = document.getElementById('lab-double');
@@ -152,13 +203,29 @@ require __DIR__ . '/includes/header.php';
   var mHint = document.getElementById('m-gender-hint');
   var dName = document.getElementById('d_full_name');
   var mName = document.getElementById('m_full_name');
+  var feeEl = document.getElementById('fee-total');
+  var utr = document.getElementById('payment_utr');
+  var shot = document.getElementById('payment_screenshot');
+  var fees = {
+    single: <?= (int)$tournament['fee_single'] ?>,
+    double: <?= (int)$tournament['fee_double'] ?>,
+    mix: <?= (int)$tournament['fee_mix'] ?>
+  };
+  var paid = <?= $isPaid ? 'true' : 'false' ?>;
   function g(){ return String(gender.value || ''); }
+  function total(){
+    var t = 0;
+    if (evSingle && evSingle.checked) t += fees.single;
+    if (evDouble && evDouble.checked) t += fees.double;
+    if (evMix && evMix.checked) t += fees.mix;
+    return t;
+  }
   function sync(){
     var hasG = g() === 'boy' || g() === 'girl';
     evBox.style.display = hasG ? 'block' : 'none';
-    if (g() === 'boy') labDouble.textContent = 'Double Boys';
-    else if (g() === 'girl') labDouble.textContent = 'Double Girls';
-    else labDouble.textContent = 'Doubles';
+    if (g() === 'boy') labDouble.firstChild.textContent = 'Double Boys';
+    else if (g() === 'girl') labDouble.firstChild.textContent = 'Double Girls';
+    else labDouble.firstChild.textContent = 'Doubles';
     var showD = hasG && evDouble.checked;
     var showM = hasG && evMix.checked;
     dBox.style.display = showD ? 'block' : 'none';
@@ -167,10 +234,22 @@ require __DIR__ . '/includes/header.php';
     mName.required = showM;
     dHint.textContent = showD ? ('Partner gender: ' + (g() === 'girl' ? 'Girl' : 'Boy') + ' (same as player)') : '';
     mHint.textContent = showM ? ('Partner gender: ' + (g() === 'girl' ? 'Boy' : 'Girl') + ' (opposite, for Mix Double)') : '';
+    var tot = total();
+    if (feeEl) feeEl.textContent = tot > 0 ? ('Total to pay: ₹' + tot) : '';
+    if (payBox) {
+      var showPay = paid && tot > 0;
+      payBox.style.display = showPay ? 'block' : 'none';
+      if (utr) utr.required = showPay;
+      if (shot) shot.required = showPay;
+    }
   }
   gender.addEventListener('change', sync);
+  evSingle.addEventListener('change', sync);
   evDouble.addEventListener('change', sync);
   evMix.addEventListener('change', sync);
+  if (utr) utr.addEventListener('input', function(){
+    utr.value = utr.value.replace(/[^0-9]/g, '');
+  });
   sync();
 })();
 </script>

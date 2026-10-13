@@ -15,7 +15,7 @@ if (!$tournament) {
     bm_redirect('tournaments.php');
 }
 
-$categories = $pdo->query('SELECT * FROM age_categories ORDER BY sort_order, name')->fetchAll();
+$categories = bm_tournament_categories($pdo, $tournamentId);
 $events = bm_event_defs();
 $allPlayers = $pdo->query('SELECT * FROM players ORDER BY full_name')->fetchAll();
 
@@ -195,7 +195,7 @@ require __DIR__ . '/includes/header.php';
 
 <?php if (!$categories): ?>
 <section class="panel">
-  <p class="empty">Create age categories first. <a href="category-form.php">Create category</a></p>
+  <p class="empty">Add age categories on this tournament first. <a href="tournament-form.php?id=<?= $tournamentId ?>">Edit tournament</a></p>
 </section>
 <?php elseif (!$allPlayers): ?>
 <section class="panel">

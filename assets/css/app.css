@@ -169,6 +169,10 @@ a { color: var(--court-dark); }
   display: block; margin: 0; padding: 0; font-weight: 500; line-height: 1.15rem;
   white-space: nowrap;
 }
+.pay-fields { display: none; gap: 0.85rem; }
+.fee-total { font-weight: 700; color: var(--court-dark); margin: 0.4rem 0 0; }
+.qr-img { max-width: 220px; height: auto; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.pay-box { display: none; }
 .share-link { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 .share-link input { flex: 1; min-width: 14rem; font: inherit; padding: 0.55rem 0.7rem; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .event-pick-box, .partner-box, .form-grid > .hint { grid-column: 1 / -1; }

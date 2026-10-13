@@ -55,9 +55,9 @@ function bm_join_url(string $token): string
  *
  * @return list<array{key:string,label:string}>
  */
-function bm_parent_age_options(PDO $pdo): array
+function bm_parent_age_options(PDO $pdo, int $tournamentId = 0): array
 {
-    $cats = $pdo->query('SELECT * FROM age_categories ORDER BY sort_order, name')->fetchAll();
+    $cats = bm_tournament_categories($pdo, $tournamentId);
     $seen = [];
     $out = [];
     foreach ($cats as $c) {
@@ -75,7 +75,7 @@ function bm_parent_age_options(PDO $pdo): array
     return $out;
 }
 
-function bm_parent_resolve_category(PDO $pdo, string $ageKey, string $gender): array
+function bm_parent_resolve_category(PDO $pdo, string $ageKey, string $gender, int $tournamentId = 0): array
 {
     $gender = $gender === 'girl' ? 'girl' : ($gender === 'boy' ? 'boy' : '');
     if ($gender === '') {
@@ -89,7 +89,7 @@ function bm_parent_resolve_category(PDO $pdo, string $ageKey, string $gender): a
     if ($group === '') {
         throw new RuntimeException('Select an age category.');
     }
-    $cats = $pdo->query('SELECT * FROM age_categories ORDER BY sort_order, name')->fetchAll();
+    $cats = bm_tournament_categories($pdo, $tournamentId);
     $match = null;
     $open = null;
     foreach ($cats as $c) {
@@ -206,7 +206,7 @@ function bm_parent_add_entry(PDO $pdo, int $tournamentId, int $playerId, int $ca
         ->execute([$tournamentId, $playerId, $categoryId, $eventCode]);
 }
 
-function bm_parent_add_team(PDO $pdo, int $tournamentId, int $catId, string $event, array $playerIds, array $busyCatIds): int
+function bm_parent_add_team(PDO $pdo, int $tournamentId, int $catId, string $event, array $playerIds, array $busyCatIds, int $includeInLetter = 1): int
 {
     $playerIds = array_values(array_unique(array_map('intval', $playerIds)));
     $catIn = implode(',', array_fill(0, count($busyCatIds), '?'));
@@ -228,8 +228,8 @@ function bm_parent_add_team(PDO $pdo, int $tournamentId, int $catId, string $eve
         $names[] = (string)$nm->fetchColumn();
     }
     $label = implode(' / ', $names);
-    $pdo->prepare('INSERT INTO tournament_teams (tournament_id, age_category_id, event_code, team_label, include_in_letter) VALUES (?,?,?,?,1)')
-        ->execute([$tournamentId, $catId, $event, $label]);
+    $pdo->prepare('INSERT INTO tournament_teams (tournament_id, age_category_id, event_code, team_label, include_in_letter) VALUES (?,?,?,?,?)')
+        ->execute([$tournamentId, $catId, $event, $label, $includeInLetter ? 1 : 0]);
     $teamId = (int)$pdo->lastInsertId();
     $ins = $pdo->prepare('INSERT INTO tournament_team_members (team_id, player_id) VALUES (?,?)');
     foreach ($playerIds as $pid) {
@@ -242,12 +242,17 @@ function bm_parent_add_team(PDO $pdo, int $tournamentId, int $catId, string $eve
  * @param array<string,mixed> $post
  * @return array{receipt:string,category:array<string,mixed>}
  */
-function bm_parent_save_submission(PDO $pdo, array $tournament, array $post): array
+function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, array $files = []): array
 {
     $tournamentId = (int)$tournament['id'];
     $ageKey = trim((string)($post['age_key'] ?? ''));
     $gender = strtolower(trim((string)($post['gender'] ?? '')));
-    $cat = bm_parent_resolve_category($pdo, $ageKey, $gender);
+    $father = trim((string)($post['father_name'] ?? ''));
+    $mobile = bm_normalize_mobile((string)($post['contact_mobile'] ?? ''));
+    if ($father === '') {
+        throw new RuntimeException('Father’s name is required.');
+    }
+    $cat = bm_parent_resolve_category($pdo, $ageKey, $gender, $tournamentId);
     $catId = (int)$cat['id'];
     $scope = bm_category_gender_scope($cat);
     $allowed = bm_events_for_gender_scope($scope);
@@ -330,17 +335,38 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post): ar
     $singleTeam = null;
     $doubleTeam = null;
     $mixTeam = null;
+    $amount = bm_parent_fee_total($tournament, $eventCodes);
+    $needPay = bm_tournament_is_paid($tournament) && $amount > 0;
+    $includeLetter = $needPay ? 0 : 1;
+    $payStatus = $needPay ? 'pending' : 'na';
+    $utr = null;
+    $shotName = null;
+    $shotHash = null;
+    if ($needPay) {
+        $utr = bm_validate_utr((string)($post['payment_utr'] ?? ''));
+        $shot = $files['payment_screenshot'] ?? null;
+        if (!is_array($shot) || (int)($shot['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            throw new RuntimeException('Upload the payment screenshot.');
+        }
+        $shotHash = bm_upload_sha256($shot);
+        bm_assert_unique_payment($pdo, $utr, $shotHash, 0);
+        $shotName = bm_save_upload($shot, 'pay');
+    }
+    $parentCode = bm_parent_code_from_post_or_session((string)($tournament['public_token'] ?? ''), (string)($post['parent_code'] ?? ''));
 
     $pdo->beginTransaction();
     try {
+        if ($needPay) {
+            bm_assert_unique_payment($pdo, (string)$utr, (string)$shotHash, 0);
+        }
         foreach ($eventCodes as $code) {
             bm_parent_add_entry($pdo, $tournamentId, $pid, $catId, $code);
             if ($code === 'single') {
-                $singleTeam = bm_parent_add_team($pdo, $tournamentId, $catId, 'single', [$pid], [$catId]);
+                $singleTeam = bm_parent_add_team($pdo, $tournamentId, $catId, 'single', [$pid], [$catId], $includeLetter);
             } elseif ($code === 'double_men' || $code === 'double_girls') {
                 $dp = (int)$doublePartner['id'];
                 bm_parent_add_entry($pdo, $tournamentId, $dp, $catId, $code);
-                $doubleTeam = bm_parent_add_team($pdo, $tournamentId, $catId, $code, [$pid, $dp], [$catId]);
+                $doubleTeam = bm_parent_add_team($pdo, $tournamentId, $catId, $code, [$pid, $dp], [$catId], $includeLetter);
             } elseif ($code === 'mix_double') {
                 $mp = (int)$mixPartner['id'];
                 $mixCat = $catId;
@@ -362,14 +388,14 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post): ar
                     }
                 }
                 bm_parent_add_entry($pdo, $tournamentId, $mp, $partnerCat, 'mix_double');
-                $mixTeam = bm_parent_add_team($pdo, $tournamentId, $mixCat, 'mix_double', [$pid, $mp], $paired);
+                $mixTeam = bm_parent_add_team($pdo, $tournamentId, $mixCat, 'mix_double', [$pid, $mp], $paired, $includeLetter);
             }
         }
 
         $receipt = bm_random_code(16);
         $pdo->prepare("INSERT INTO parent_submissions
-            (tournament_id, receipt_code, age_category_id, primary_player_id, double_partner_id, mix_partner_id, event_codes, single_team_id, double_team_id, mix_team_id)
-            VALUES (?,?,?,?,?,?,?,?,?,?)")->execute([
+            (tournament_id, receipt_code, age_category_id, primary_player_id, double_partner_id, mix_partner_id, event_codes, single_team_id, double_team_id, mix_team_id, father_name, contact_mobile, parent_code, payment_status, payment_amount, payment_utr, payment_screenshot, payment_screenshot_hash)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")->execute([
             $tournamentId,
             $receipt,
             $catId,
@@ -380,6 +406,14 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post): ar
             $singleTeam,
             $doubleTeam,
             $mixTeam,
+            $father,
+            $mobile,
+            $parentCode,
+            $payStatus,
+            $amount,
+            $utr,
+            $shotName,
+            $shotHash,
         ]);
         $pdo->commit();
     } catch (Throwable $e) {
@@ -389,7 +423,7 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post): ar
         throw $e;
     }
 
-    return ['receipt' => $receipt, 'category' => $cat];
+    return ['receipt' => $receipt, 'category' => $cat, 'parent_code' => $parentCode];
 }
 
 function bm_parent_load_receipt(PDO $pdo, string $receipt, int $tournamentId): ?array
@@ -432,6 +466,182 @@ function bm_own_parent_receipt(string $publicToken): string
 {
     bm_boot_session();
     return trim((string)($_SESSION['bm_parent_receipts'][$publicToken] ?? ''));
+}
+
+function bm_normalize_mobile(string $raw): string
+{
+    $d = preg_replace('/\D+/', '', $raw) ?? '';
+    if (strlen($d) === 12 && str_starts_with($d, '91')) {
+        $d = substr($d, 2);
+    }
+    if (!preg_match('/^[6-9][0-9]{9}$/', $d)) {
+        throw new RuntimeException('Enter a valid 10-digit mobile number.');
+    }
+    return $d;
+}
+
+function bm_validate_utr(string $raw): string
+{
+    $utr = strtoupper(trim($raw));
+    $utr = str_replace(["\n", "\r", "\t", ' '], '', $utr);
+    if ($utr === '' || preg_match('/[^0-9]/', $utr)) {
+        throw new RuntimeException('UTR / reference number must be digits only — no commas, spaces or words.');
+    }
+    if (strlen($utr) < 8 || strlen($utr) > 18) {
+        throw new RuntimeException('UTR / reference number must be 8 to 18 digits.');
+    }
+    return $utr;
+}
+
+function bm_upload_sha256(array $file): string
+{
+    $tmp = (string)($file['tmp_name'] ?? '');
+    if ($tmp === '' || !is_file($tmp)) {
+        throw new RuntimeException('Upload the payment screenshot.');
+    }
+    $hash = hash_file('sha256', $tmp);
+    if (!is_string($hash) || $hash === '') {
+        throw new RuntimeException('Could not read the payment screenshot.');
+    }
+    return $hash;
+}
+
+function bm_assert_unique_payment(PDO $pdo, string $utr, string $hash, int $exceptId = 0): void
+{
+    $utr = trim($utr);
+    $hash = trim($hash);
+    if ($utr !== '') {
+        $st = $pdo->prepare("SELECT id FROM parent_submissions WHERE payment_utr = ? AND id != ? LIMIT 1");
+        $st->execute([$utr, $exceptId]);
+        if ($st->fetch()) {
+            throw new RuntimeException('This UTR / reference number was already used. Entry not saved.');
+        }
+    }
+    if ($hash !== '') {
+        $st = $pdo->prepare("SELECT id FROM parent_submissions WHERE payment_screenshot_hash = ? AND id != ? LIMIT 1");
+        $st->execute([$hash, $exceptId]);
+        if ($st->fetch()) {
+            throw new RuntimeException('This payment screenshot was already used. Entry not saved.');
+        }
+    }
+}
+
+function bm_parent_ctx_key(string $publicToken): string
+{
+    return 'bm_pc_' . substr(hash('sha256', $publicToken), 0, 16);
+}
+
+function bm_parent_code_from_post_or_session(string $publicToken, string $posted = ''): string
+{
+    $posted = trim($posted);
+    if ($posted !== '' && preg_match('/^[a-f0-9]{16,64}$/i', $posted)) {
+        bm_remember_parent_code($publicToken, $posted);
+        return $posted;
+    }
+    $have = bm_own_parent_code($publicToken);
+    if ($have !== '') {
+        return $have;
+    }
+    $code = bm_random_code(16);
+    bm_remember_parent_code($publicToken, $code);
+    return $code;
+}
+
+function bm_remember_parent_code(string $publicToken, string $code): void
+{
+    bm_boot_session();
+    $_SESSION['bm_parent_code'][$publicToken] = $code;
+    $cookie = bm_parent_ctx_key($publicToken);
+    if (!headers_sent()) {
+        setcookie($cookie, $code, [
+            'expires' => time() + 60 * 60 * 24 * 120,
+            'path' => '/',
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
+}
+
+function bm_own_parent_code(string $publicToken): string
+{
+    bm_boot_session();
+    $code = trim((string)($_SESSION['bm_parent_code'][$publicToken] ?? ''));
+    if ($code !== '') {
+        return $code;
+    }
+    $cookie = trim((string)($_COOKIE[bm_parent_ctx_key($publicToken)] ?? ''));
+    if ($cookie !== '' && preg_match('/^[a-f0-9]{16,64}$/i', $cookie)) {
+        $_SESSION['bm_parent_code'][$publicToken] = $cookie;
+        return $cookie;
+    }
+    return '';
+}
+
+/** @return list<array<string,mixed>> */
+function bm_parent_submissions_for_code(PDO $pdo, int $tournamentId, string $parentCode): array
+{
+    $parentCode = trim($parentCode);
+    if ($parentCode === '' || !preg_match('/^[a-f0-9]{16,64}$/i', $parentCode)) {
+        return [];
+    }
+    $st = $pdo->prepare('SELECT receipt_code FROM parent_submissions WHERE tournament_id=? AND parent_code=? ORDER BY id');
+    $st->execute([$tournamentId, $parentCode]);
+    $out = [];
+    foreach ($st->fetchAll() as $row) {
+        $loaded = bm_parent_load_receipt($pdo, (string)$row['receipt_code'], $tournamentId);
+        if ($loaded) {
+            $out[] = $loaded;
+        }
+    }
+    return $out;
+}
+
+function bm_parent_owns_receipt(PDO $pdo, array $tournament, string $receipt, string $parentCode): bool
+{
+    $row = bm_parent_load_receipt($pdo, $receipt, (int)$tournament['id']);
+    if (!$row) {
+        return false;
+    }
+    return hash_equals(trim((string)($row['parent_code'] ?? '')), trim($parentCode));
+}
+
+function bm_parent_confirm_paid(PDO $pdo, array $sub): void
+{
+    $pdo->prepare("UPDATE parent_submissions SET payment_status='paid' WHERE id=?")->execute([(int)$sub['id']]);
+    foreach (bm_parent_submission_team_ids($pdo, $sub) as $teamId) {
+        $pdo->prepare("UPDATE tournament_teams SET include_in_letter=1, updated_at=datetime('now','localtime') WHERE id=?")
+            ->execute([$teamId]);
+    }
+}
+
+/**
+ * @return array<int, array<string,mixed>>
+ */
+function bm_tournament_parent_meta_by_player(PDO $pdo, int $tournamentId): array
+{
+    $st = $pdo->prepare('SELECT * FROM parent_submissions WHERE tournament_id=? ORDER BY id');
+    $st->execute([$tournamentId]);
+    $map = [];
+    foreach ($st->fetchAll() as $row) {
+        foreach (['primary_player_id', 'double_partner_id', 'mix_partner_id'] as $col) {
+            $pid = (int)($row[$col] ?? 0);
+            if ($pid > 0 && !isset($map[$pid])) {
+                $map[$pid] = $row;
+            }
+        }
+    }
+    return $map;
+}
+
+function bm_parent_payment_label(?string $status, int $amount): string
+{
+    if ($status === 'pending') {
+        return 'Pending ₹' . $amount;
+    }
+    if ($status === 'paid') {
+        return 'Paid ₹' . $amount;
+    }
+    return $amount > 0 ? ('₹' . $amount) : 'Free / no fee';
 }
 
 function bm_parent_load_by_id(PDO $pdo, int $id, int $tournamentId = 0): ?array
