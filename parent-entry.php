@@ -1369,6 +1369,108 @@ function bm_parent_payment_label(?string $status, int $amount): string
     return $amount > 0 ? ('₹' . $amount) : 'Free / no fee';
 }
 
+/** @return array<string, string> */
+function bm_parent_confirm_messages(): array
+{
+    return [
+        'accept_paid' => 'Accept this entry? Date, UTR and sender name match the bank statement?',
+        'accept_pending' => 'Accept this entry with payment pending? The player will be on the list. Cash will be collected on the tournament day.',
+        'mark_cash' => 'Mark cash received and change this payment to Paid?',
+        'date_mismatch' => 'Decline this entry because the date of payment does not match the bank statement?',
+        'utr_mismatch' => 'Decline this entry because the reference / UTR does not match the bank statement?',
+        'sender_mismatch' => 'Decline this entry because the sender name does not match the bank statement?',
+    ];
+}
+
+function bm_parent_confirm_attr(string $key): string
+{
+    $map = bm_parent_confirm_messages();
+    return bm_confirm_attr($map[$key] ?? 'Are you sure?');
+}
+
+/**
+ * @param list<string> $statuses
+ * @return list<array<string,mixed>>
+ */
+function bm_parent_list_for_browse(PDO $pdo, int $tournamentId, array $statuses, string $q = ''): array
+{
+    if ($statuses === []) {
+        return [];
+    }
+    $in = implode(',', array_fill(0, count($statuses), '?'));
+    $sql = "
+        SELECT s.id, s.receipt_code, s.event_codes, s.payment_status, s.payment_amount,
+               s.payment_utr, s.payment_date, s.payment_sender, s.father_name, s.contact_mobile,
+               c.id AS category_id, c.name AS category_name, c.sort_order,
+               p.full_name, p.gender, p.bai_id, p.pbi_id,
+               p.father_name AS player_father, p.mobile, p.address,
+               dp.full_name AS d_full_name, dp.gender AS d_gender, dp.bai_id AS d_bai_id, dp.pbi_id AS d_pbi_id,
+               dp.father_name AS d_father_name, dp.mobile AS d_mobile, dp.address AS d_address,
+               mp.full_name AS m_full_name, mp.gender AS m_gender, mp.bai_id AS m_bai_id, mp.pbi_id AS m_pbi_id,
+               mp.father_name AS m_father_name, mp.mobile AS m_mobile, mp.address AS m_address
+        FROM parent_submissions s
+        JOIN age_categories c ON c.id = s.age_category_id
+        JOIN players p ON p.id = s.primary_player_id
+        LEFT JOIN players dp ON dp.id = s.double_partner_id
+        LEFT JOIN players mp ON mp.id = s.mix_partner_id
+        WHERE s.tournament_id = ?
+          AND s.payment_status IN ($in)
+    ";
+    $params = array_merge([$tournamentId], array_values($statuses));
+    $q = trim($q);
+    if ($q !== '') {
+        $sql .= " AND (
+            p.full_name LIKE ? OR IFNULL(dp.full_name,'') LIKE ? OR IFNULL(mp.full_name,'') LIKE ?
+        )";
+        $like = '%' . $q . '%';
+        $params[] = $like;
+        $params[] = $like;
+        $params[] = $like;
+    }
+    $sql .= ' ORDER BY c.sort_order, c.name COLLATE NOCASE, p.full_name COLLATE NOCASE, s.id';
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    return $st->fetchAll();
+}
+
+/**
+ * @param list<array<string,mixed>> $rows
+ * @return array<string, list<array<string,mixed>>>
+ */
+function bm_parent_group_by_category(array $rows): array
+{
+    $grouped = [];
+    foreach ($rows as $row) {
+        $name = trim((string)($row['category_name'] ?? '')) !== '' ? (string)$row['category_name'] : 'Age';
+        $grouped[$name][] = $row;
+    }
+    return $grouped;
+}
+
+function bm_parent_row_event_labels(array $row): string
+{
+    $labs = [];
+    foreach (explode(',', (string)($row['event_codes'] ?? '')) as $code) {
+        $code = trim($code);
+        if ($code !== '') {
+            $labs[] = bm_event_label($code);
+        }
+    }
+    return implode(', ', $labs);
+}
+
+function bm_parent_top_bar(string $token, string $parentCode = ''): void
+{
+    $t = rawurlencode($token);
+    $p = $parentCode !== '' ? '&amp;p=' . rawurlencode($parentCode) : '';
+    echo '<div class="parent-top-bar">';
+    echo '<p class="parent-top-links"><a href="join-declined.php?t=' . bm_h($t) . $p . '">Declined entries</a></p>';
+    echo '<p class="parent-top-links parent-top-right">';
+    echo '<a href="join-confirmed.php?t=' . bm_h($t) . '">Confirmed entries</a>';
+    echo '<a href="join-receipts.php?t=' . bm_h($t) . '">Download receipt</a>';
+    echo '</p></div>';
+}
+
 function bm_parent_load_by_id(PDO $pdo, int $id, int $tournamentId = 0): ?array
 {
     if ($id <= 0) {

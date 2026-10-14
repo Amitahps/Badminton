@@ -65,9 +65,7 @@ $form = [
 $pageTitle = $tournament['name'] . ' · Parent entry';
 require __DIR__ . '/includes/header.php';
 ?>
-<p class="parent-top-links">
-  <a href="join-declined.php?t=<?= bm_h(urlencode($token)) ?><?= $parentCode !== '' ? '&amp;p=' . bm_h(urlencode($parentCode)) : '' ?>">Declined entries</a>
-</p>
+<?php bm_parent_top_bar($token, $parentCode); ?>
 <section class="page-head">
   <div>
     <p class="eyebrow">Parent / coach entry</p>

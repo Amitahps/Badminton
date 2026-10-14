@@ -173,8 +173,14 @@ a { color: var(--court-dark); }
 .fee-total { font-weight: 700; color: var(--court-dark); margin: 0.4rem 0 0; }
 .qr-img { max-width: 220px; height: auto; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .pay-box { display: none; }
-.parent-top-links { text-align: left; margin: 0 0 0.85rem; }
+.parent-top-bar { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.85rem; margin: 0 0 0.85rem; }
+.parent-top-links { text-align: left; margin: 0; }
 .parent-top-links a { font-weight: 600; }
+.parent-top-right { text-align: right; display: flex; flex-wrap: wrap; gap: 0.75rem 1.1rem; justify-content: flex-end; }
+.cat-drop { border: 1px solid var(--line); border-radius: 10px; background: #fff; margin-bottom: 0.7rem; overflow: hidden; }
+.cat-drop > summary { cursor: pointer; font-weight: 600; padding: 0.8rem 0.95rem; font-family: var(--display); list-style-position: inside; }
+.cat-drop[open] > summary { border-bottom: 1px solid var(--line); }
+.date-band { margin: 1.05rem 0 0.35rem; font-size: 1.02rem; }
 .bank-pay { border: 1px solid var(--line); border-radius: 10px; padding: 0.65rem 0.9rem; background: #fff; margin: 0.5rem 0; }
 .bank-pay p { margin: 0.2rem 0; }
 .share-link { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }

@@ -176,12 +176,73 @@ $parentSubs = $pdo->prepare("
     JOIN age_categories c ON c.id = s.age_category_id
     JOIN players p ON p.id = s.primary_player_id
     WHERE s.tournament_id = ?
-    ORDER BY s.id DESC
+    ORDER BY CASE WHEN s.payment_status = 'review' THEN 0 ELSE 1 END,
+             CASE WHEN IFNULL(s.payment_date,'') = '' THEN 1 ELSE 0 END,
+             s.payment_date ASC, s.payment_utr ASC, s.id ASC
 ");
 $parentSubs->execute([$id]);
 $parentRows = $parentSubs->fetchAll();
+$reviewByDate = [];
+$otherParentRows = [];
+foreach ($parentRows as $ps) {
+    if ((string)($ps['payment_status'] ?? '') === 'review') {
+        $dk = trim((string)($ps['payment_date'] ?? ''));
+        $reviewByDate[$dk !== '' ? $dk : '_none'][] = $ps;
+    } else {
+        $otherParentRows[] = $ps;
+    }
+}
+
+$renderParentRow = static function (array $ps): void {
+    $st = (string)($ps['payment_status'] ?? '');
+    $pd = trim((string)($ps['payment_date'] ?? ''));
+    $labs = [];
+    foreach (explode(',', (string)$ps['event_codes']) as $code) {
+        $code = trim($code);
+        if ($code !== '') {
+            $labs[] = bm_event_label($code);
+        }
+    }
+    echo '<tr>';
+    echo '<td><strong>' . bm_h($pd !== '' ? bm_fmt_date($pd) : '—') . '</strong></td>';
+    echo '<td>' . bm_h((string)($ps['payment_utr'] ?? '')) . '</td>';
+    echo '<td>' . bm_h((string)($ps['payment_sender'] ?? '')) . '</td>';
+    echo '<td>' . ((int)($ps['payment_amount'] ?? 0) > 0 ? '₹' . (int)$ps['payment_amount'] : '—') . '</td>';
+    echo '<td><strong>' . bm_h((string)$ps['full_name']) . '</strong>';
+    if (trim((string)($ps['father_name'] ?? '')) !== '') {
+        echo '<div class="muted">' . bm_h((string)$ps['father_name']) . '</div>';
+    }
+    if (trim((string)($ps['contact_mobile'] ?? '')) !== '') {
+        echo '<div class="muted">' . bm_h((string)$ps['contact_mobile']) . '</div>';
+    }
+    echo '</td>';
+    echo '<td>' . bm_h((string)$ps['category_name']) . '</td>';
+    echo '<td>' . bm_h(implode(', ', $labs)) . '</td>';
+    echo '<td>' . bm_h(bm_parent_payment_label($st, (int)($ps['payment_amount'] ?? 0)));
+    if ($st === 'declined') {
+        echo '<div class="muted">' . bm_h(bm_decline_reason_label((string)($ps['decline_reason'] ?? ''))) . '</div>';
+    }
+    echo '</td>';
+    echo '<td class="right actions">';
+    echo '<a class="btn btn-sm" href="parent-edit.php?id=' . (int)$ps['id'] . '">Open</a>';
+    if (in_array($st, ['review', 'declined'], true)) {
+        echo '<form method="post" class="inline"><button type="submit" name="accept_paid" value="' . (int)$ps['id'] . '" class="btn btn-sm btn-primary" ' . bm_parent_confirm_attr('accept_paid') . '>Accept</button></form>';
+        echo '<form method="post" class="inline"><button type="submit" name="accept_pending" value="' . (int)$ps['id'] . '" class="btn btn-sm" ' . bm_parent_confirm_attr('accept_pending') . '>Payment pending</button></form>';
+        foreach (bm_decline_reasons() as $code => $lab) {
+            echo '<form method="post" class="inline"><input type="hidden" name="decline_id" value="' . (int)$ps['id'] . '">';
+            echo '<button type="submit" name="decline_reason" value="' . bm_h($code) . '" class="btn btn-sm btn-danger" ' . bm_parent_confirm_attr($code) . '>' . bm_h($lab) . '</button></form>';
+        }
+    } elseif ($st === 'pending') {
+        echo '<form method="post" class="inline"><button type="submit" name="mark_cash" value="' . (int)$ps['id'] . '" class="btn btn-sm btn-primary" ' . bm_parent_confirm_attr('mark_cash') . '>Payment received</button></form>';
+    }
+    echo '<form method="post" action="parent-edit.php" class="inline" onsubmit="return confirm(\'Remove this parent entry from the tournament, letter and Excel?\');">';
+    echo '<input type="hidden" name="id" value="' . (int)$ps['id'] . '">';
+    echo '<button type="submit" name="delete_parent" value="1" class="btn btn-sm btn-danger">Remove</button></form>';
+    echo '</td></tr>';
+};
 
 $dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
+$wrapClass = 'wrap-wide';
 $pageTitle = $tournament['name'] . ' · Badminton';
 require __DIR__ . '/includes/header.php';
 ?>
@@ -193,6 +254,8 @@ require __DIR__ . '/includes/header.php';
   </div>
   <div class="page-actions">
     <a class="btn btn-primary" href="tournament-entries.php?tournament_id=<?= $id ?>">Assign players / categories / events</a>
+    <a class="btn" href="confirmed.php?id=<?= $id ?>">Confirmed entries</a>
+    <a class="btn" href="receipts.php?id=<?= $id ?>">Download receipts</a>
     <a class="btn" href="parent-verify.php?tournament_id=<?= $id ?>">Verify / print / Excel</a>
     <a class="btn" href="letter.php?id=<?= $id ?>">Share letter PDF</a>
     <a class="btn" href="letter.php?id=<?= $id ?>&amp;for=parents">Share parents &amp; coaches PDF</a>
@@ -209,73 +272,28 @@ require __DIR__ . '/includes/header.php';
     <button type="button" class="btn btn-primary" id="copy-parent-link">Copy link</button>
   </div>
   <?php if ($parentRows): ?>
-  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Check date, UTR and sender against the bank statement, then Accept, decline (one mismatch), or Payment pending. <a href="parent-verify.php?tournament_id=<?= $id ?>">Verify, print or Excel</a>. Share <a href="letter.php?id=<?= $id ?>">one official letter PDF</a> or <a href="letter.php?id=<?= $id ?>&amp;for=parents">one parents &amp; coaches PDF</a>. Awaiting-check and declined entries stay off the letter until Accept or Payment pending.</p>
+  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s), grouped by the payment date the parent entered so you can match the bank statement. Each Accept or Decline asks you to confirm first.</p>
+  <?php if ($reviewByDate): ?>
+  <h3 class="date-band">Awaiting check — by payment date</h3>
+  <?php foreach ($reviewByDate as $dateKey => $list): ?>
+  <p class="date-band"><strong>Payment date <?= $dateKey === '_none' ? 'not given' : bm_h(bm_fmt_date($dateKey)) ?></strong> · <?= count($list) ?></p>
   <table class="table">
-    <thead><tr><th>When</th><th>Player</th><th>Father</th><th>Contact</th><th>Age</th><th>Events</th><th>Payment</th><th></th></tr></thead>
+    <thead><tr><th>Pay date</th><th>UTR</th><th>Sender</th><th>₹</th><th>Player</th><th>Age</th><th>Events</th><th>Status</th><th></th></tr></thead>
     <tbody>
-    <?php foreach ($parentRows as $ps): ?>
-      <tr>
-        <td><?= bm_h((string)$ps['created_at']) ?></td>
-        <td><?= bm_h((string)$ps['full_name']) ?></td>
-        <td><?= bm_h((string)($ps['father_name'] ?? '')) ?></td>
-        <td><?= bm_h((string)($ps['contact_mobile'] ?? '')) ?></td>
-        <td><?= bm_h((string)$ps['category_name']) ?></td>
-        <td><?php
-          $labs = [];
-          foreach (explode(',', (string)$ps['event_codes']) as $code) {
-              $code = trim($code);
-              if ($code !== '') {
-                  $labs[] = bm_event_label($code);
-              }
-          }
-          echo bm_h(implode(', ', $labs));
-        ?></td>
-        <td>
-          <?= bm_h(bm_parent_payment_label((string)($ps['payment_status'] ?? ''), (int)($ps['payment_amount'] ?? 0))) ?>
-          <?php if (($ps['payment_status'] ?? '') === 'declined'): ?>
-            <div class="muted"><?= bm_h(bm_decline_reason_label((string)($ps['decline_reason'] ?? ''))) ?></div>
-          <?php endif; ?>
-          <?php
-            $pd = trim((string)($ps['payment_date'] ?? ''));
-            if ($pd !== ''): ?>
-            <div class="muted">Date <?= bm_h(bm_fmt_date($pd)) ?></div>
-          <?php endif; ?>
-          <?php if (trim((string)($ps['payment_utr'] ?? '')) !== ''): ?>
-            <div class="muted">UTR <?= bm_h((string)$ps['payment_utr']) ?></div>
-          <?php endif; ?>
-          <?php if (trim((string)($ps['payment_sender'] ?? '')) !== ''): ?>
-            <div class="muted">Sender <?= bm_h((string)$ps['payment_sender']) ?></div>
-          <?php endif; ?>
-        </td>
-        <td class="right actions">
-          <a class="btn btn-sm" href="parent-edit.php?id=<?= (int)$ps['id'] ?>">Open</a>
-          <?php if (in_array((string)($ps['payment_status'] ?? ''), ['review', 'declined'], true)): ?>
-          <form method="post" class="inline">
-            <button type="submit" name="accept_paid" value="<?= (int)$ps['id'] ?>" class="btn btn-sm btn-primary">Accept</button>
-          </form>
-          <form method="post" class="inline">
-            <button type="submit" name="accept_pending" value="<?= (int)$ps['id'] ?>" class="btn btn-sm">Payment pending</button>
-          </form>
-          <?php foreach (bm_decline_reasons() as $code => $lab): ?>
-          <form method="post" class="inline">
-            <input type="hidden" name="decline_id" value="<?= (int)$ps['id'] ?>">
-            <button type="submit" name="decline_reason" value="<?= bm_h($code) ?>" class="btn btn-sm btn-danger"><?= bm_h($lab) ?></button>
-          </form>
-          <?php endforeach; ?>
-          <?php elseif (($ps['payment_status'] ?? '') === 'pending'): ?>
-          <form method="post" class="inline">
-            <button type="submit" name="mark_cash" value="<?= (int)$ps['id'] ?>" class="btn btn-sm btn-primary">Payment received</button>
-          </form>
-          <?php endif; ?>
-          <form method="post" action="parent-edit.php" class="inline" onsubmit="return confirm('Remove this parent entry from the tournament, letter and Excel?');">
-            <input type="hidden" name="id" value="<?= (int)$ps['id'] ?>">
-            <button type="submit" name="delete_parent" value="1" class="btn btn-sm btn-danger">Remove</button>
-          </form>
-        </td>
-      </tr>
-    <?php endforeach; ?>
+    <?php foreach ($list as $ps) { $renderParentRow($ps); } ?>
     </tbody>
   </table>
+  <?php endforeach; ?>
+  <?php endif; ?>
+  <?php if ($otherParentRows): ?>
+  <h3 class="date-band">Already decided</h3>
+  <table class="table">
+    <thead><tr><th>Pay date</th><th>UTR</th><th>Sender</th><th>₹</th><th>Player</th><th>Age</th><th>Events</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    <?php foreach ($otherParentRows as $ps) { $renderParentRow($ps); } ?>
+    </tbody>
+  </table>
+  <?php endif; ?>
   <?php endif; ?>
 </section>
 <script>

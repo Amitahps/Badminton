@@ -179,20 +179,20 @@ $payDateShow = $payDateShow !== '' ? bm_fmt_date($payDateShow) : '—';
   <?php if (in_array($paySt, ['review', 'declined'], true)): ?>
   <form method="post" class="form-actions" style="margin-bottom:1rem;">
     <input type="hidden" name="id" value="<?= $id ?>">
-    <button type="submit" name="accept_paid" value="1" class="btn btn-primary">Accept (statement matches)</button>
-    <button type="submit" name="accept_pending" value="1" class="btn">Payment pending</button>
+    <button type="submit" name="accept_paid" value="1" class="btn btn-primary" <?= bm_parent_confirm_attr('accept_paid') ?>>Accept (statement matches)</button>
+    <button type="submit" name="accept_pending" value="1" class="btn" <?= bm_parent_confirm_attr('accept_pending') ?>>Payment pending</button>
   </form>
   <p class="hint">If the bank statement does not match, click one mismatch and that is the decline:</p>
   <form method="post" class="form-actions" style="margin-bottom:1rem;">
     <input type="hidden" name="id" value="<?= $id ?>">
     <?php foreach (bm_decline_reasons() as $code => $lab): ?>
-      <button type="submit" name="decline_reason" value="<?= bm_h($code) ?>" class="btn btn-danger"><?= bm_h($lab) ?></button>
+      <button type="submit" name="decline_reason" value="<?= bm_h($code) ?>" class="btn btn-danger" <?= bm_parent_confirm_attr($code) ?>><?= bm_h($lab) ?></button>
     <?php endforeach; ?>
   </form>
   <?php elseif ($paySt === 'pending'): ?>
   <form method="post" class="form-actions" style="margin-bottom:1rem;">
     <input type="hidden" name="id" value="<?= $id ?>">
-    <button type="submit" name="mark_cash" value="1" class="btn btn-primary">Payment received (cash)</button>
+    <button type="submit" name="mark_cash" value="1" class="btn btn-primary" <?= bm_parent_confirm_attr('mark_cash') ?>>Payment received (cash)</button>
   </form>
   <?php endif; ?>
   <form method="post" class="form form-grid">

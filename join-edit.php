@@ -125,9 +125,7 @@ $emptySender = $payStatus === 'declined' && $declineReason === 'sender_mismatch'
 $pageTitle = 'Edit your entry · ' . $tournament['name'];
 require __DIR__ . '/includes/header.php';
 ?>
-<p class="parent-top-links">
-  <a href="join-declined.php?t=<?= bm_h(urlencode($token)) ?>&amp;p=<?= bm_h(urlencode($code)) ?>">Declined entries</a>
-</p>
+<?php bm_parent_top_bar($token, $code); ?>
 <section class="page-head">
   <div>
     <p class="eyebrow"><?= bm_h($tournament['name']) ?></p>

@@ -20,6 +20,12 @@ function bm_h(?string $v): string
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 }
 
+function bm_confirm_attr(string $message): string
+{
+    $js = json_encode($message, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS);
+    return 'onclick="return confirm(' . htmlspecialchars((string)$js, ENT_QUOTES, 'UTF-8') . ');"';
+}
+
 function bm_flash(string $type, string $message): void
 {
     bm_boot_session();

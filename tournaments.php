@@ -51,6 +51,8 @@ require __DIR__ . '/includes/header.php';
         <td><?= (int)$r['entry_count'] ?></td>
         <td class="right actions">
           <a class="btn btn-sm btn-primary" href="tournament.php?id=<?= (int)$r['id'] ?>">Open</a>
+          <a class="btn btn-sm" href="confirmed.php?id=<?= (int)$r['id'] ?>">Confirmed</a>
+          <a class="btn btn-sm" href="receipts.php?id=<?= (int)$r['id'] ?>">Receipts</a>
           <a class="btn btn-sm" href="letter-select.php?tournament_id=<?= (int)$r['id'] ?>">Letter</a>
           <a class="btn btn-sm" href="tournament-form.php?id=<?= (int)$r['id'] ?>">Edit</a>
           <form method="post" class="inline delete-tournament-form" onsubmit="return confirmTournamentDelete(this);">

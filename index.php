@@ -28,6 +28,8 @@ require __DIR__ . '/includes/header.php';
   </div>
   <div class="page-actions">
     <a class="btn btn-primary" href="tournament-form.php">New tournament</a>
+    <a class="btn" href="confirmed.php">Confirmed entries</a>
+    <a class="btn" href="receipts.php">Download receipts</a>
     <a class="btn" href="player-form.php">Add player</a>
   </div>
 </section>

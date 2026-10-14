@@ -61,9 +61,7 @@ $blockPlayer = static function (string $title, array $pl): void {
   .letter-sheet { box-shadow: none; border: none; margin: 0; padding: 12mm 14mm; }
 }
 </style>
-<p class="parent-top-links no-print">
-  <a href="join-declined.php?t=<?= bm_h(urlencode($token)) ?>&amp;p=<?= bm_h(urlencode($code)) ?>">Declined entries</a>
-</p>
+<div class="no-print"><?php bm_parent_top_bar($token, $code); ?></div>
 <section class="page-head no-print">
   <div>
     <p class="eyebrow">Your entries only</p>

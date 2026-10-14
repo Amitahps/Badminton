@@ -26,6 +26,17 @@ if (!$row) {
     exit;
 }
 
+if ((string)($row['payment_status'] ?? '') !== 'paid') {
+    http_response_code(403);
+    $pageTitle = 'Receipt · ' . $tournament['name'];
+    require __DIR__ . '/includes/header.php';
+    echo '<section class="panel"><p class="empty">A receipt is available only after the organiser confirms the online payment. Entries with fee still pending do not appear in the receipt list.</p>';
+    echo '<p><a class="btn" href="join-receipts.php?t=' . bm_h(urlencode($token)) . '">Back to receipts</a> ';
+    echo '<a class="btn" href="join-confirmed.php?t=' . bm_h(urlencode($token)) . '">Confirmed entries</a></p></section>';
+    require __DIR__ . '/includes/footer.php';
+    exit;
+}
+
 $p = $row['primary'] ?: [];
 $cat = $row['category'] ?: [];
 $eventLabels = [];
@@ -37,8 +48,9 @@ $receiptUrl = bm_join_url($token);
 $receiptUrl = preg_replace('/join\.php\?t=/', 'join-receipt.php?t=', $receiptUrl) ?: $receiptUrl;
 $receiptUrl .= '&r=' . rawurlencode($receipt);
 
-$pageTitle = 'Entry copy · ' . $tournament['name'];
+$pageTitle = 'Receipt · ' . $tournament['name'];
 require __DIR__ . '/includes/header.php';
+bm_parent_top_bar($token, bm_own_parent_code($token));
 
 $blockPlayer = static function (string $title, array $pl): void {
     echo '<section class="letter-category">';
@@ -65,9 +77,9 @@ $blockPlayer = static function (string $title, array $pl): void {
 </style>
 <section class="page-head no-print">
   <div>
-    <p class="eyebrow">Your copy only</p>
-    <h1>Share / print PDF</h1>
-    <p class="lede">Save this as PDF and share it with the player’s parents to cross-check against the tournament list. Other parents cannot see this page.</p>
+    <p class="eyebrow"><?= bm_h($tournament['name']) ?></p>
+    <h1>Download receipt</h1>
+    <p class="lede">Print or save this receipt as PDF. Only entries with confirmed online payment can be downloaded.</p>
   </div>
   <div class="page-actions">
     <button type="button" class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
@@ -81,9 +93,14 @@ $blockPlayer = static function (string $title, array $pl): void {
   <h1 style="font-size:1.35rem;margin:0 0 0.6rem;"><?= bm_h($tournament['name']) ?></h1>
   <p>Held at <strong><?= bm_h($tournament['held_at']) ?></strong><br>
      Dates: <strong><?= bm_h($dateText) ?></strong></p>
-  <p>This is the entry submitted for this tournament. Please cross-check name, age category, events, BAI ID, PBI ID, father, contact and district with the tournament list.</p>
+  <p>Payment receipt — online payment confirmed by the organiser.</p>
   <p><strong>Age category:</strong> <?= bm_h((string)($cat['name'] ?? '')) ?><br>
-     <strong>Events:</strong> <?= bm_h(implode(', ', $eventLabels)) ?></p>
+     <strong>Events:</strong> <?= bm_h(implode(', ', $eventLabels)) ?><br>
+     <strong>Payment:</strong> <?= bm_h(bm_parent_payment_label((string)($row['payment_status'] ?? ''), (int)($row['payment_amount'] ?? 0))) ?>
+     <?php if (trim((string)($row['payment_date'] ?? '')) !== ''): ?> · Date <?= bm_h(bm_fmt_date((string)$row['payment_date'])) ?><?php endif; ?>
+     <?php if (trim((string)($row['payment_utr'] ?? '')) !== ''): ?> · UTR <?= bm_h((string)$row['payment_utr']) ?><?php endif; ?>
+     <?php if (trim((string)($row['payment_sender'] ?? '')) !== ''): ?> · Sender <?= bm_h((string)$row['payment_sender']) ?><?php endif; ?>
+  </p>
 
   <?php $blockPlayer('Player', $p); ?>
   <?php if ($row['double_partner']) {
