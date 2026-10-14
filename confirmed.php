@@ -53,7 +53,17 @@ if (!$tournament) {
 }
 
 $token = bm_tournament_ensure_public_token($pdo, $tournament);
+$fmt = strtolower(trim((string)($_GET['format'] ?? '')));
+$catId = (int)($_GET['category_id'] ?? 0);
 $rows = bm_parent_list_for_browse($pdo, $tid, ['paid', 'pending', 'na'], $q);
+if ($fmt === 'csv' || $fmt === 'excel') {
+    $export = bm_parent_filter_by_category_id($rows, $catId);
+    $label = 'all';
+    if ($catId > 0 && $export) {
+        $label = (string)($export[0]['category_name'] ?? 'category');
+    }
+    bm_parent_output_confirmed_csv($tournament, $export, $label);
+}
 $grouped = bm_parent_group_by_category($rows);
 $browseMode = 'confirmed';
 $filterAction = 'confirmed.php';

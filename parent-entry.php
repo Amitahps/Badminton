@@ -1459,6 +1459,61 @@ function bm_parent_row_event_labels(array $row): string
     return implode(', ', $labs);
 }
 
+/**
+ * @param list<array<string,mixed>> $rows
+ * @return list<array<string,mixed>>
+ */
+function bm_parent_filter_by_category_id(array $rows, int $categoryId): array
+{
+    if ($categoryId <= 0) {
+        return $rows;
+    }
+    $out = [];
+    foreach ($rows as $row) {
+        if ((int)($row['category_id'] ?? 0) === $categoryId) {
+            $out[] = $row;
+        }
+    }
+    return $out;
+}
+
+/**
+ * @param list<array<string,mixed>> $rows
+ */
+function bm_parent_output_confirmed_csv(array $tournament, array $rows, string $label = 'all'): void
+{
+    $safe = preg_replace('/[^A-Za-z0-9_-]+/', '_', $label) ?: 'all';
+    $file = 'confirmed_' . $safe . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $file . '"');
+    $out = fopen('php://output', 'w');
+    if ($out === false) {
+        return;
+    }
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, [(string)($tournament['name'] ?? 'Tournament'), 'Confirmed entries']);
+    fputcsv($out, ['Category', 'Player', 'Gender', 'BAI ID', 'PBI ID', 'Father', 'Contact', 'District', 'Events', 'Payment', 'UTR', 'Doubles partner', 'Mix partner']);
+    foreach ($rows as $r) {
+        fputcsv($out, [
+            (string)($r['category_name'] ?? ''),
+            (string)($r['full_name'] ?? ''),
+            bm_gender_label((string)($r['gender'] ?? '')),
+            (string)($r['bai_id'] ?? ''),
+            (string)($r['pbi_id'] ?? ''),
+            (string)(($r['player_father'] ?? '') !== '' ? $r['player_father'] : ($r['father_name'] ?? '')),
+            (string)(($r['mobile'] ?? '') !== '' ? $r['mobile'] : ($r['contact_mobile'] ?? '')),
+            (string)($r['address'] ?? ''),
+            bm_parent_row_event_labels($r),
+            bm_parent_payment_label((string)($r['payment_status'] ?? ''), (int)($r['payment_amount'] ?? 0)),
+            (string)($r['payment_utr'] ?? ''),
+            (string)($r['d_full_name'] ?? ''),
+            (string)($r['m_full_name'] ?? ''),
+        ]);
+    }
+    fclose($out);
+    exit;
+}
+
 function bm_parent_top_bar(string $token, string $parentCode = ''): void
 {
     $t = rawurlencode($token);

@@ -181,6 +181,9 @@ a { color: var(--court-dark); }
 .cat-drop > summary { cursor: pointer; font-weight: 600; padding: 0.8rem 0.95rem; font-family: var(--display); list-style-position: inside; }
 .cat-drop[open] > summary { border-bottom: 1px solid var(--line); }
 .date-band { margin: 1.05rem 0 0.35rem; font-size: 1.02rem; }
+.cat-export { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; font-weight: 500; }
+.cat-drop > summary { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.print-title { font-family: var(--display); font-size: 1.35rem; margin: 0 0 0.85rem; line-height: 1.35; }
 .bank-pay { border: 1px solid var(--line); border-radius: 10px; padding: 0.65rem 0.9rem; background: #fff; margin: 0.5rem 0; }
 .bank-pay p { margin: 0.2rem 0; }
 .share-link { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
@@ -243,6 +246,10 @@ a { color: var(--court-dark); }
   .page-head h1 { font-size: 1.4rem; }
   a { color: inherit; text-decoration: none; }
   .crop-overlay { display: none !important; }
+  .cat-drop.print-hide { display: none !important; }
+  .cat-drop { border: none; margin: 0 0 1rem; break-inside: avoid; }
+  .cat-drop > summary { list-style: none; border: none; padding: 0 0 0.4rem; }
+  .cat-drop > summary::-webkit-details-marker { display: none; }
 }
 @media (max-width: 980px) {
   .report-layout { grid-template-columns: 1fr; }

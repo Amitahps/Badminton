@@ -21,6 +21,18 @@ foreach ($grouped as $list) {
     $total += count($list);
 }
 $isReceipts = $browseMode === 'receipts';
+$exportBase = $filterHidden;
+if ($q !== '') {
+    $exportBase['q'] = $q;
+}
+$excelAll = $filterAction . '?' . http_build_query(array_merge($exportBase, ['format' => 'csv']));
+$catChoices = [];
+foreach ($grouped as $catName => $list) {
+    $cid = (int)(($list[0]['category_id'] ?? 0));
+    if ($cid > 0) {
+        $catChoices[$cid] = $catName;
+    }
+}
 ?>
 <section class="page-head">
   <div>
@@ -31,7 +43,14 @@ $isReceipts = $browseMode === 'receipts';
       Confirmed entries. Players accepted by the organiser are listed here, including those with fee pending.
     <?php endif; ?></p>
   </div>
+  <?php if (!$isReceipts && $total > 0): ?>
+  <div class="page-actions no-print">
+    <button type="button" class="btn btn-primary" data-print-all>Print / PDF — all</button>
+    <a class="btn" href="<?= bm_h($excelAll) ?>">Excel — all</a>
+  </div>
+  <?php endif; ?>
 </section>
+<p class="print-only print-title"><?= bm_h((string)($tournament['name'] ?? 'Tournament')) ?><br>Confirmed entries<?php if ($q !== ''): ?> · <?= bm_h($q) ?><?php endif; ?></p>
 <section class="panel no-print">
   <form method="get" action="<?= bm_h($filterAction) ?>" class="filters">
     <?php foreach ($filterHidden as $k => $v): ?>
@@ -43,6 +62,18 @@ $isReceipts = $browseMode === 'receipts';
       <a class="btn" href="<?= bm_h($filterAction . ($filterHidden ? ('?' . http_build_query($filterHidden)) : '')) ?>">Clear</a>
     <?php endif; ?>
   </form>
+  <?php if (!$isReceipts && $catChoices): ?>
+  <form class="filters" id="cat-export" onsubmit="return false;">
+    <select name="category_id" id="cat-export-id">
+      <option value="">One category…</option>
+      <?php foreach ($catChoices as $cid => $cname): ?>
+        <option value="<?= (int)$cid ?>"><?= bm_h($cname) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <button type="button" class="btn" data-print-cat-select>Print / PDF this category</button>
+    <button type="button" class="btn" data-excel-cat-select>Excel this category</button>
+  </form>
+  <?php endif; ?>
 </section>
 <?php if ($total === 0): ?>
 <section class="panel">
@@ -56,8 +87,17 @@ $isReceipts = $browseMode === 'receipts';
 </section>
 <?php else: ?>
   <?php foreach ($grouped as $catName => $list): ?>
-  <details class="cat-drop"<?= $openAll ? ' open' : '' ?>>
-    <summary><?= bm_h($catName) ?> <span class="muted">(<?= count($list) ?>)</span></summary>
+  <?php $cid = (int)(($list[0]['category_id'] ?? 0)); ?>
+  <details class="cat-drop" data-cat-id="<?= $cid ?>"<?= $openAll ? ' open' : '' ?>>
+    <summary>
+      <?= bm_h($catName) ?> <span class="muted">(<?= count($list) ?>)</span>
+      <?php if (!$isReceipts && $cid > 0): ?>
+      <span class="cat-export no-print">
+        <button type="button" class="btn btn-sm" data-print-cat="<?= $cid ?>">Print / PDF</button>
+        <a class="btn btn-sm" href="<?= bm_h($filterAction . '?' . http_build_query(array_merge($exportBase, ['format' => 'csv', 'category_id' => (string)$cid]))) ?>">Excel</a>
+      </span>
+      <?php endif; ?>
+    </summary>
     <table class="table">
       <thead>
         <tr>
@@ -112,4 +152,53 @@ $isReceipts = $browseMode === 'receipts';
     </table>
   </details>
   <?php endforeach; ?>
+<?php endif; ?>
+<?php if (!$isReceipts && $total > 0): ?>
+<script>
+(function(){
+  var excelBase = <?= json_encode($filterAction . '?' . http_build_query($exportBase), JSON_UNESCAPED_UNICODE) ?>;
+  function cats(){ return Array.prototype.slice.call(document.querySelectorAll('.cat-drop[data-cat-id]')); }
+  function resetPrint(){
+    document.body.classList.remove('print-one');
+    cats().forEach(function(d){ d.classList.remove('print-hide'); });
+  }
+  function printAll(){
+    resetPrint();
+    cats().forEach(function(d){ d.open = true; });
+    window.print();
+  }
+  function printCat(id){
+    resetPrint();
+    document.body.classList.add('print-one');
+    cats().forEach(function(d){
+      var match = String(d.getAttribute('data-cat-id')) === String(id);
+      d.open = match;
+      d.classList.toggle('print-hide', !match);
+    });
+    window.print();
+  }
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if (t.closest && t.closest('.cat-export')) { e.stopPropagation(); }
+    if (t.closest && t.closest('[data-print-all]')) { e.preventDefault(); printAll(); return; }
+    var one = t.closest && t.closest('[data-print-cat]');
+    if (one) { e.preventDefault(); printCat(one.getAttribute('data-print-cat')); return; }
+    if (t.closest && t.closest('[data-print-cat-select]')) {
+      e.preventDefault();
+      var id = (document.getElementById('cat-export-id') || {}).value;
+      if (!id) { window.alert('Choose a category first.'); return; }
+      printCat(id);
+      return;
+    }
+    if (t.closest && t.closest('[data-excel-cat-select]')) {
+      e.preventDefault();
+      var id2 = (document.getElementById('cat-export-id') || {}).value;
+      if (!id2) { window.alert('Choose a category first.'); return; }
+      var join = excelBase.indexOf('?') >= 0 ? '&' : '?';
+      window.location.href = excelBase + join + 'format=csv&category_id=' + encodeURIComponent(id2);
+    }
+  }, true);
+  window.addEventListener('afterprint', resetPrint);
+})();
+</script>
 <?php endif; ?>
