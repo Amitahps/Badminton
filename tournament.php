@@ -358,7 +358,7 @@ $feeStats = bm_parent_tournament_stats($parentRows);
   </div>
   <div class="bank-auto" style="margin-top:1rem;">
     <h3 style="margin:0 0 0.35rem;font-size:1.02rem;">Auto-check (optional)</h3>
-    <p class="hint" style="margin-top:0;">Upload bank Excel or CSV. A match is only when <strong>UTR</strong>, <strong>amount</strong> and <strong>date</strong> are the same. 123456 matches 123456 only — not 1234567, 012345, or 123456, 123456. You can still Accept or Decline one by one.</p>
+    <p class="hint" style="margin-top:0;">Upload bank Excel or CSV. A match is only when <strong>UTR</strong>, <strong>amount</strong> and <strong>date</strong> are the same. UTR <strong>123456</strong> matches <strong>123456</strong> only — nothing before, after or between (not 123 456, 1234567, 012345, or 123456, 123456). You can still Accept or Decline one by one.</p>
     <form method="post" enctype="multipart/form-data" class="filters" style="margin:0.5rem 0 0;">
       <input type="file" name="bank_file" accept=".xlsx,.csv,.txt" required>
       <button type="submit" name="bank_auto_check" value="1" class="btn btn-primary">Auto-check</button>

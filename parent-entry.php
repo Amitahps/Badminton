@@ -613,12 +613,12 @@ function bm_utr_too_similar(string $a, string $b): bool
 }
 
 /**
- * Exact UTR token. Spaces may be removed. Commas, extra numbers or words fail.
- * 123456 matches 123456 only — not 1234567, 012345, or "123456, 123456".
+ * Exact UTR token. The cell may only be those digits.
+ * Nothing before, after, or between — not 123 456, x123456, 123456x, 1234567, 012345, or 123456, 123456.
  */
 function bm_utr_strict_token(string $raw): string
 {
-    $s = preg_replace('/[\x{00A0}\s]+/u', '', trim($raw)) ?? '';
+    $s = trim($raw);
     if ($s === '' || !preg_match('/^\d{6,18}$/', $s)) {
         return '';
     }
@@ -1708,7 +1708,7 @@ function bm_parent_confirm_messages(): array
 {
     return [
         'accept_paid' => 'Accept this entry? Date, UTR and sender name match the bank statement?',
-        'accept_bank_matched' => 'Accept all entries where UTR, amount and payment date match the bank file exactly? Nearby UTRs are not matches.',
+        'accept_bank_matched' => 'Accept all entries where UTR, amount and payment date match the bank file exactly? UTR must be the same digits only — nothing before, after or between.',
         'accept_pending' => 'Accept this entry without payment? The player will be on the list. Cash can be collected later on the tournament day.',
         'mark_cash' => 'Mark cash received and change this payment to Paid?',
         'date_mismatch' => 'Decline this entry because the date of payment does not match the bank statement?',
