@@ -612,6 +612,326 @@ function bm_utr_too_similar(string $a, string $b): bool
     return $a !== '' && $a === $b;
 }
 
+/**
+ * Exact UTR token. Spaces may be removed. Commas, extra numbers or words fail.
+ * 123456 matches 123456 only — not 1234567, 012345, or "123456, 123456".
+ */
+function bm_utr_strict_token(string $raw): string
+{
+    $s = preg_replace('/[\x{00A0}\s]+/u', '', trim($raw)) ?? '';
+    if ($s === '' || !preg_match('/^\d{6,18}$/', $s)) {
+        return '';
+    }
+    return $s;
+}
+
+function bm_utr_exact_match(string $a, string $b): bool
+{
+    $a = bm_utr_strict_token($a);
+    $b = bm_utr_strict_token($b);
+    return $a !== '' && $a === $b;
+}
+
+function bm_bank_parse_amount(string $raw): int
+{
+    $s = trim($raw);
+    $s = str_replace([',', '₹', ' '], '', $s);
+    $s = preg_replace('/^(rs\.?|inr)/i', '', $s) ?? $s;
+    $s = trim($s);
+    if ($s === '' || !preg_match('/^-?\d+(\.\d{1,2})?$/', $s)) {
+        return 0;
+    }
+    $n = (int)round((float)$s);
+    return $n > 0 ? $n : 0;
+}
+
+function bm_bank_parse_ymd(string $raw): string
+{
+    $raw = trim($raw);
+    if ($raw === '') {
+        return '';
+    }
+    if (preg_match('/^\d{5}$/', $raw)) {
+        $n = (int)$raw;
+        if ($n >= 20000 && $n <= 80000) {
+            $base = DateTime::createFromFormat('Y-m-d', '1899-12-30');
+            if ($base instanceof DateTime) {
+                $base->modify('+' . $n . ' days');
+                return $base->format('Y-m-d');
+            }
+        }
+    }
+    foreach (['d-m-Y', 'd/m/Y', 'Y-m-d', 'j-n-Y', 'j/n/Y', 'd-M-Y', 'd/M/Y', 'd-m-y', 'd/m/y'] as $fmt) {
+        $dt = DateTime::createFromFormat('!' . $fmt, $raw);
+        if ($dt instanceof DateTime) {
+            $err = DateTime::getLastErrors();
+            if (($err['warning_count'] ?? 0) === 0 && ($err['error_count'] ?? 0) === 0) {
+                return $dt->format('Y-m-d');
+            }
+        }
+    }
+    return '';
+}
+
+function bm_zip_inner_file(string $zipPath, string $inner): string
+{
+    if (class_exists('ZipArchive')) {
+        $z = new ZipArchive();
+        if ($z->open($zipPath) === true) {
+            $data = $z->getFromName($inner);
+            $z->close();
+            if (is_string($data) && $data !== '') {
+                return $data;
+            }
+        }
+    }
+    $cmd = 'unzip -p ' . escapeshellarg($zipPath) . ' ' . escapeshellarg($inner) . ' 2>/dev/null';
+    $out = shell_exec($cmd);
+    return is_string($out) ? $out : '';
+}
+
+/**
+ * @return list<list<string>>
+ */
+function bm_xlsx_to_rows(string $path): array
+{
+    $sharedXml = bm_zip_inner_file($path, 'xl/sharedStrings.xml');
+    $sheetXml = bm_zip_inner_file($path, 'xl/worksheets/sheet1.xml');
+    if ($sheetXml === '') {
+        throw new RuntimeException('Could not read the Excel sheet. Save as CSV and upload again.');
+    }
+    $shared = [];
+    if ($sharedXml !== '' && preg_match_all('/<si\b[^>]*>(.*?)<\/si>/s', $sharedXml, $sis)) {
+        foreach ($sis[1] as $si) {
+            $text = '';
+            if (preg_match_all('/<t[^>]*>(.*?)<\/t>/s', $si, $ts)) {
+                foreach ($ts[1] as $t) {
+                    $text .= html_entity_decode(str_replace(['&lt;', '&gt;', '&amp;'], ['<', '>', '&'], $t), ENT_QUOTES | ENT_XML1, 'UTF-8');
+                }
+            }
+            $shared[] = $text;
+        }
+    }
+    $rows = [];
+    if (!preg_match_all('/<row\b[^>]*>(.*?)<\/row>/s', $sheetXml, $rowXmls)) {
+        return [];
+    }
+    foreach ($rowXmls[1] as $rowXml) {
+        $cells = [];
+        if (preg_match_all('/<c\b([^>]*)>(.*?)<\/c>/s', $rowXml, $cs, PREG_SET_ORDER)) {
+            foreach ($cs as $c) {
+                $attrs = $c[1];
+                $inner = $c[2];
+                $col = 0;
+                if (preg_match('/r="([A-Z]+)\d+"/i', $attrs, $rm)) {
+                    $col = 0;
+                    foreach (str_split(strtoupper($rm[1])) as $ch) {
+                        $col = $col * 26 + (ord($ch) - 64);
+                    }
+                    $col--;
+                }
+                $val = '';
+                if (preg_match('/<v[^>]*>(.*?)<\/v>/s', $inner, $vm)) {
+                    $val = html_entity_decode($vm[1], ENT_QUOTES | ENT_XML1, 'UTF-8');
+                } elseif (preg_match('/<t[^>]*>(.*?)<\/t>/s', $inner, $tm)) {
+                    $val = html_entity_decode($tm[1], ENT_QUOTES | ENT_XML1, 'UTF-8');
+                }
+                if (preg_match('/t="s"/', $attrs) && $val !== '' && isset($shared[(int)$val])) {
+                    $val = $shared[(int)$val];
+                }
+                $cells[$col] = $val;
+            }
+        }
+        if ($cells === []) {
+            continue;
+        }
+        ksort($cells);
+        $max = (int)max(array_keys($cells));
+        $line = [];
+        for ($i = 0; $i <= $max; $i++) {
+            $line[] = (string)($cells[$i] ?? '');
+        }
+        $rows[] = $line;
+    }
+    return $rows;
+}
+
+/**
+ * @return list<list<string>>
+ */
+function bm_csv_to_rows(string $path): array
+{
+    $raw = file_get_contents($path);
+    if (!is_string($raw) || $raw === '') {
+        return [];
+    }
+    if (str_starts_with($raw, "\xEF\xBB\xBF")) {
+        $raw = substr($raw, 3);
+    }
+    $delim = ',';
+    $sample = substr($raw, 0, 4000);
+    $counts = [',' => substr_count($sample, ','), ';' => substr_count($sample, ';'), "\t" => substr_count($sample, "\t")];
+    arsort($counts);
+    $top = (string)array_key_first($counts);
+    if (($counts[$top] ?? 0) > 0) {
+        $delim = $top;
+    }
+    $fh = fopen($path, 'r');
+    if ($fh === false) {
+        return [];
+    }
+    if (fread($fh, 3) !== "\xEF\xBB\xBF") {
+        rewind($fh);
+    }
+    $rows = [];
+    while (($row = fgetcsv($fh, 0, $delim)) !== false) {
+        $rows[] = array_map(static fn($c) => trim((string)$c), $row);
+    }
+    fclose($fh);
+    return $rows;
+}
+
+/**
+ * @return list<array{utr:string,amount:int,date:string}>
+ */
+function bm_bank_rows_from_grid(array $grid): array
+{
+    $headerIdx = -1;
+    $map = ['utr' => -1, 'amount' => -1, 'date' => -1];
+    foreach ($grid as $i => $row) {
+        $joined = strtolower(implode(' ', $row));
+        $utrCol = $amtCol = $dateCol = -1;
+        foreach ($row as $c => $cell) {
+            $h = strtolower(trim((string)$cell));
+            $h = preg_replace('/[^a-z0-9]+/', ' ', $h) ?? $h;
+            if ($utrCol < 0 && preg_match('/\b(utr|reference|ref no|refno|txn id|transaction id|utr no|inst no)\b/', $h)) {
+                $utrCol = (int)$c;
+            }
+            if ($amtCol < 0 && preg_match('/\b(credit|deposit|cr amt|amount|amt)\b/', $h) && !preg_match('/\b(debit|balance|dr)\b/', $h)) {
+                $amtCol = (int)$c;
+            }
+            if ($dateCol < 0 && preg_match('/\b(date|txn date|value date|tran date)\b/', $h)) {
+                $dateCol = (int)$c;
+            }
+        }
+        if ($utrCol >= 0 && $amtCol >= 0) {
+            $headerIdx = $i;
+            $map = ['utr' => $utrCol, 'amount' => $amtCol, 'date' => $dateCol];
+            break;
+        }
+        unset($joined);
+    }
+    $out = [];
+    $start = $headerIdx >= 0 ? $headerIdx + 1 : 0;
+    for ($i = $start; $i < count($grid); $i++) {
+        $row = $grid[$i];
+        if ($headerIdx >= 0) {
+            $utr = bm_utr_strict_token((string)($row[$map['utr']] ?? ''));
+            $amt = bm_bank_parse_amount((string)($row[$map['amount']] ?? ''));
+            $date = $map['date'] >= 0 ? bm_bank_parse_ymd((string)($row[$map['date']] ?? '')) : '';
+        } else {
+            $utr = '';
+            $amt = 0;
+            $date = '';
+            $digitGroups = 0;
+            foreach ($row as $cell) {
+                $tok = bm_utr_strict_token((string)$cell);
+                if ($tok !== '') {
+                    $digitGroups++;
+                    if ($digitGroups === 1) {
+                        $utr = $tok;
+                    } else {
+                        $utr = '';
+                    }
+                }
+                if ($amt <= 0) {
+                    $amt = bm_bank_parse_amount((string)$cell);
+                }
+                if ($date === '') {
+                    $date = bm_bank_parse_ymd((string)$cell);
+                }
+            }
+            if ($digitGroups !== 1) {
+                continue;
+            }
+        }
+        if ($utr === '' || $amt <= 0 || $date === '') {
+            continue;
+        }
+        $out[] = ['utr' => $utr, 'amount' => $amt, 'date' => $date];
+    }
+    return $out;
+}
+
+/**
+ * @return list<array{utr:string,amount:int,date:string}>
+ */
+function bm_bank_rows_from_upload(array $file): array
+{
+    $tmp = (string)($file['tmp_name'] ?? '');
+    $name = strtolower((string)($file['name'] ?? ''));
+    $err = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($err !== UPLOAD_ERR_OK || $tmp === '' || !is_file($tmp)) {
+        throw new RuntimeException('Choose a bank Excel or CSV file.');
+    }
+    if ((int)($file['size'] ?? 0) > 8 * 1024 * 1024) {
+        throw new RuntimeException('File is too large. Use a file under 8 MB.');
+    }
+    if (str_ends_with($name, '.xlsx')) {
+        $grid = bm_xlsx_to_rows($tmp);
+    } elseif (str_ends_with($name, '.csv') || str_ends_with($name, '.txt')) {
+        $grid = bm_csv_to_rows($tmp);
+    } elseif (str_ends_with($name, '.pdf')) {
+        throw new RuntimeException('PDF is not read here. Save the statement as Excel or CSV and upload that.');
+    } elseif (str_ends_with($name, '.xls')) {
+        throw new RuntimeException('Old .xls is not read. Save as .xlsx or CSV and upload again.');
+    } else {
+        throw new RuntimeException('Upload an Excel (.xlsx) or CSV file from the bank.');
+    }
+    $rows = bm_bank_rows_from_grid($grid);
+    if ($rows === []) {
+        throw new RuntimeException('No bank lines with a single UTR, date and amount were found. Check the column headings.');
+    }
+    return $rows;
+}
+
+/**
+ * Match only when UTR, amount and date are all exact. Declined entries are ignored.
+ *
+ * @param list<array<string,mixed>> $entries
+ * @param list<array{utr:string,amount:int,date:string}> $bank
+ * @return array{matched:list<array<string,mixed>>,pending:list<array<string,mixed>>}
+ */
+function bm_bank_auto_match(array $entries, array $bank): array
+{
+    $byUtr = [];
+    foreach ($bank as $b) {
+        $u = $b['utr'];
+        if (isset($byUtr[$u])) {
+            $byUtr[$u] = null;
+        } else {
+            $byUtr[$u] = $b;
+        }
+    }
+    $matched = [];
+    $pending = [];
+    foreach ($entries as $e) {
+        if ((string)($e['payment_status'] ?? '') !== 'review') {
+            continue;
+        }
+        $u = bm_utr_strict_token((string)($e['payment_utr'] ?? ''));
+        $amt = (int)($e['payment_amount'] ?? 0);
+        $date = trim((string)($e['payment_date'] ?? ''));
+        $b = ($u !== '' && array_key_exists($u, $byUtr)) ? $byUtr[$u] : null;
+        if (is_array($b) && $amt > 0 && $date !== '' && $b['amount'] === $amt && $b['date'] === $date) {
+            $matched[] = $e;
+        } else {
+            $pending[] = $e;
+        }
+    }
+    return ['matched' => $matched, 'pending' => $pending];
+}
+
 function bm_upload_sha256(array $file): string
 {
     $tmp = (string)($file['tmp_name'] ?? '');
@@ -1388,6 +1708,7 @@ function bm_parent_confirm_messages(): array
 {
     return [
         'accept_paid' => 'Accept this entry? Date, UTR and sender name match the bank statement?',
+        'accept_bank_matched' => 'Accept all entries where UTR, amount and payment date match the bank file exactly? Nearby UTRs are not matches.',
         'accept_pending' => 'Accept this entry without payment? The player will be on the list. Cash can be collected later on the tournament day.',
         'mark_cash' => 'Mark cash received and change this payment to Paid?',
         'date_mismatch' => 'Decline this entry because the date of payment does not match the bank statement?',
