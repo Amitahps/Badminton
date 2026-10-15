@@ -50,7 +50,7 @@ $receiptUrl .= '&r=' . rawurlencode($receipt);
 
 $pageTitle = 'Receipt · ' . $tournament['name'];
 require __DIR__ . '/includes/header.php';
-bm_parent_top_bar($token, bm_own_parent_code($token));
+bm_parent_top_bar($token, bm_own_parent_code($token), 'confirmed');
 
 $blockPlayer = static function (string $title, array $pl): void {
     echo '<section class="letter-category">';

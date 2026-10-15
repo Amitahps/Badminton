@@ -541,9 +541,10 @@ function bm_assert_unique_utr(PDO $pdo, string $utr, int $exceptId = 0): void
 function bm_decline_reasons(): array
 {
     return [
-        'date_mismatch' => 'Date mismatch',
         'utr_mismatch' => 'Reference no mismatch',
+        'date_mismatch' => 'Date mismatch',
         'sender_mismatch' => 'Sender name mismatch',
+        'amount_mismatch' => 'Amount mismatch',
     ];
 }
 
@@ -1348,6 +1349,7 @@ function bm_parent_confirm_messages(): array
         'date_mismatch' => 'Decline this entry because the date of payment does not match the bank statement?',
         'utr_mismatch' => 'Decline this entry because the reference / UTR does not match the bank statement?',
         'sender_mismatch' => 'Decline this entry because the sender name does not match the bank statement?',
+        'amount_mismatch' => 'Decline this entry because the amount does not match the bank statement?',
     ];
 }
 
@@ -1483,15 +1485,41 @@ function bm_parent_output_confirmed_csv(array $tournament, array $rows, string $
     exit;
 }
 
-function bm_parent_top_bar(string $token, string $parentCode = ''): void
+function bm_parent_choice_cards(string $token, string $parentCode = '', string $current = 'new'): void
 {
     $t = rawurlencode($token);
     $p = $parentCode !== '' ? '&amp;p=' . rawurlencode($parentCode) : '';
-    echo '<div class="parent-top-bar">';
-    echo '<p class="parent-top-links"><a href="join-declined.php?t=' . bm_h($t) . $p . '">Declined entries</a></p>';
-    echo '<p class="parent-top-links parent-top-right">';
-    echo '<a href="join-confirmed.php?t=' . bm_h($t) . '">Confirmed entries</a>';
-    echo '</p></div>';
+    $items = [
+        'new' => [
+            'href' => 'join.php?t=' . $t . '&amp;go=new',
+            'title' => 'New Entry',
+            'note' => 'Add a new player for this tournament. Fill name, age category, events and payment details.',
+        ],
+        'confirmed' => [
+            'href' => 'join-confirmed.php?t=' . $t,
+            'title' => 'Confirmed Entries',
+            'note' => 'Players the organiser has accepted. Includes fee pending. Download a receipt only after online payment is confirmed.',
+        ],
+        'declined' => [
+            'href' => 'join-declined.php?t=' . $t . $p,
+            'title' => 'Declined Entries',
+            'note' => 'Your payment did not match the bank statement. Open your player, correct the empty field and submit again.',
+        ],
+    ];
+    echo '<div class="choice-grid">';
+    foreach ($items as $key => $item) {
+        $cls = 'choice-card' . ($current === $key ? ' is-current' : '');
+        echo '<a class="' . $cls . '" href="' . $item['href'] . '">';
+        echo '<strong>' . bm_h($item['title']) . '</strong>';
+        echo '<span>' . bm_h($item['note']) . '</span>';
+        echo '</a>';
+    }
+    echo '</div>';
+}
+
+function bm_parent_top_bar(string $token, string $parentCode = '', string $current = ''): void
+{
+    bm_parent_choice_cards($token, $parentCode, $current);
 }
 
 function bm_parent_load_by_id(PDO $pdo, int $id, int $tournamentId = 0): ?array

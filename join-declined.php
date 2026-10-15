@@ -32,8 +32,7 @@ foreach ($rows as $row) {
 $pageTitle = 'Declined entries · ' . $tournament['name'];
 require __DIR__ . '/includes/header.php';
 ?>
-<?php bm_parent_top_bar($token, $code); ?>
-<p class="hint" style="margin-top:-0.4rem;"><a href="join.php?t=<?= bm_h(urlencode($token)) ?>">Back to entry form</a></p>
+<?php bm_parent_top_bar($token, $code, 'declined'); ?>
 <section class="page-head">
   <div>
     <p class="eyebrow"><?= bm_h($tournament['name']) ?></p>

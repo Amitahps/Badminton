@@ -70,6 +70,13 @@ $renderConfirmedCells = static function (array $row, bool $isReceipts, string $t
     echo '<td>' . bm_h((string)($row['address'] ?? '')) . '</td>';
     echo '<td>' . bm_h(bm_parent_row_event_labels($row)) . '</td>';
     echo '<td>' . bm_h(bm_parent_payment_label((string)($row['payment_status'] ?? ''), (int)($row['payment_amount'] ?? 0))) . '</td>';
+    echo '<td class="right no-print">';
+    if ((string)($row['payment_status'] ?? '') === 'paid') {
+        echo '<a class="btn btn-sm btn-primary" href="join-receipt.php?t=' . bm_h(urlencode($token)) . '&amp;r=' . bm_h(urlencode((string)$row['receipt_code'])) . '">Download receipt</a>';
+    } else {
+        echo '<span class="muted">Receipt after paid</span>';
+    }
+    echo '</td>';
 };
 ?>
 <section class="page-head">
@@ -87,9 +94,6 @@ $renderConfirmedCells = static function (array $row, bool $isReceipts, string $t
     <a class="btn <?= $view === 'category' ? 'btn-primary' : '' ?>" href="<?= bm_h($viewCatUrl) ?>">Category wise</a>
     <button type="button" class="btn" data-print-all>Print / PDF</button>
     <a class="btn" href="<?= bm_h($excelAll) ?>">Excel</a>
-    <?php if ($receiptsUrl !== ''): ?>
-      <a class="btn btn-primary" href="<?= bm_h($receiptsUrl) ?>">Download receipt</a>
-    <?php endif; ?>
   </div>
   <?php endif; ?>
 </section>
@@ -143,6 +147,7 @@ $renderConfirmedCells = static function (array $row, bool $isReceipts, string $t
         <th>District</th>
         <th>Events</th>
         <th>Payment</th>
+        <th class="no-print"></th>
       </tr>
     </thead>
     <tbody>
@@ -185,6 +190,7 @@ $renderConfirmedCells = static function (array $row, bool $isReceipts, string $t
             <th>District</th>
             <th>Events</th>
             <th>Payment</th>
+            <th class="no-print"></th>
           <?php endif; ?>
         </tr>
       </thead>

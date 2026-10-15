@@ -62,15 +62,27 @@ $form = [
     'payment_sender' => (string)($_POST['payment_sender'] ?? ''),
 ];
 
+$showForm = isset($_POST['save_parent']) || (string)($_GET['go'] ?? '') === 'new';
 $pageTitle = $tournament['name'] . ' · Parent entry';
 require __DIR__ . '/includes/header.php';
 ?>
-<?php bm_parent_top_bar($token, $parentCode); ?>
 <section class="page-head">
   <div>
     <p class="eyebrow">Parent / coach entry</p>
     <h1><?= bm_h($tournament['name']) ?></h1>
-    <p class="lede">Held at <strong><?= bm_h($tournament['held_at']) ?></strong> on <strong><?= bm_h($dateText) ?></strong>. Fill <strong>one player / age category</strong> at a time. You can add more players after save. You will see only your own entries.</p>
+    <p class="lede">Held at <strong><?= bm_h($tournament['held_at']) ?></strong> on <strong><?= bm_h($dateText) ?></strong>.</p>
+  </div>
+</section>
+<?php bm_parent_choice_cards($token, $parentCode, $showForm ? 'new' : ''); ?>
+<?php if (!$showForm): ?>
+<section class="panel">
+  <p class="lede" style="max-width:none;">Choose <strong>New Entry</strong> to add a player, <strong>Confirmed Entries</strong> to see accepted names, or <strong>Declined Entries</strong> if your payment did not match and needs a correction.</p>
+</section>
+<?php else: ?>
+<section class="page-head" style="margin-top:0.4rem;">
+  <div>
+    <h2 style="margin:0;font-family:var(--display);font-size:1.25rem;">New entry</h2>
+    <p class="lede">Fill <strong>one player / age category</strong> at a time. You can add more players after save. You will see only your own entries.</p>
   </div>
 </section>
 
@@ -287,5 +299,6 @@ require __DIR__ . '/includes/header.php';
   sync();
 })();
 </script>
+<?php endif; ?>
 <?php endif; ?>
 <?php require __DIR__ . '/includes/footer.php'; ?>

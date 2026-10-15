@@ -194,7 +194,7 @@ foreach ($parentRows as $ps) {
     }
 }
 
-$renderParentRow = static function (array $ps): void {
+$renderReviewRow = static function (array $ps, int $n): void {
     $st = (string)($ps['payment_status'] ?? '');
     $pd = trim((string)($ps['payment_date'] ?? ''));
     $labs = [];
@@ -204,42 +204,35 @@ $renderParentRow = static function (array $ps): void {
             $labs[] = bm_event_label($code);
         }
     }
-    echo '<tr>';
-    echo '<td><strong>' . bm_h($pd !== '' ? bm_fmt_date($pd) : '—') . '</strong></td>';
-    echo '<td>' . bm_h((string)($ps['payment_utr'] ?? '')) . '</td>';
-    echo '<td>' . bm_h((string)($ps['payment_sender'] ?? '')) . '</td>';
-    echo '<td>' . ((int)($ps['payment_amount'] ?? 0) > 0 ? '₹' . (int)$ps['payment_amount'] : '—') . '</td>';
-    echo '<td><strong>' . bm_h((string)$ps['full_name']) . '</strong>';
+    $amt = (int)($ps['payment_amount'] ?? 0);
+    echo '<article class="review-row">';
+    echo '<div class="review-grid">';
+    echo '<div><span class="review-k">#</span><strong>' . $n . '</strong></div>';
+    echo '<div><span class="review-k">Date</span><strong>' . bm_h($pd !== '' ? bm_fmt_date($pd) : '—') . '</strong></div>';
+    echo '<div><span class="review-k">UTR</span><strong>' . bm_h((string)($ps['payment_utr'] ?? '')) . '</strong></div>';
+    echo '<div><span class="review-k">Sender</span><strong>' . bm_h((string)($ps['payment_sender'] ?? '')) . '</strong></div>';
+    echo '<div><span class="review-k">Amount</span><strong>' . ($amt > 0 ? '₹' . $amt : '—') . '</strong></div>';
+    echo '<div><span class="review-k">Player</span><strong><a href="parent-edit.php?id=' . (int)$ps['id'] . '">' . bm_h((string)$ps['full_name']) . '</a></strong>';
     if (trim((string)($ps['father_name'] ?? '')) !== '') {
         echo '<div class="muted">' . bm_h((string)$ps['father_name']) . '</div>';
     }
     if (trim((string)($ps['contact_mobile'] ?? '')) !== '') {
         echo '<div class="muted">' . bm_h((string)$ps['contact_mobile']) . '</div>';
     }
-    echo '</td>';
-    echo '<td>' . bm_h((string)$ps['category_name']) . '</td>';
-    echo '<td>' . bm_h(implode(', ', $labs)) . '</td>';
-    echo '<td>' . bm_h(bm_parent_payment_label($st, (int)($ps['payment_amount'] ?? 0)));
-    if ($st === 'declined') {
-        echo '<div class="muted">' . bm_h(bm_decline_reason_label((string)($ps['decline_reason'] ?? ''))) . '</div>';
+    echo '</div>';
+    echo '<div><span class="review-k">Age</span>' . bm_h((string)$ps['category_name']) . '</div>';
+    echo '<div><span class="review-k">Event</span>' . bm_h(implode(', ', $labs)) . '</div>';
+    echo '<div><span class="review-k">Status</span><span class="status-pill">' . bm_h(bm_parent_payment_label($st, $amt)) . '</span></div>';
+    echo '</div><div class="review-actions">';
+    echo '<details class="drop"><summary class="btn btn-sm btn-danger">Decline</summary><div class="drop-menu">';
+    foreach (bm_decline_reasons() as $code => $lab) {
+        echo '<form method="post"><input type="hidden" name="decline_id" value="' . (int)$ps['id'] . '">';
+        echo '<button type="submit" name="decline_reason" value="' . bm_h($code) . '" ' . bm_parent_confirm_attr($code) . '>' . bm_h($lab) . '</button></form>';
     }
-    echo '</td>';
-    echo '<td class="right actions">';
-    echo '<a class="btn btn-sm" href="parent-edit.php?id=' . (int)$ps['id'] . '">Open</a>';
-    if (in_array($st, ['review', 'declined'], true)) {
-        echo '<form method="post" class="inline"><button type="submit" name="accept_paid" value="' . (int)$ps['id'] . '" class="btn btn-sm btn-primary" ' . bm_parent_confirm_attr('accept_paid') . '>Accept</button></form>';
-        echo '<form method="post" class="inline"><button type="submit" name="accept_pending" value="' . (int)$ps['id'] . '" class="btn btn-sm" ' . bm_parent_confirm_attr('accept_pending') . '>Payment pending</button></form>';
-        foreach (bm_decline_reasons() as $code => $lab) {
-            echo '<form method="post" class="inline"><input type="hidden" name="decline_id" value="' . (int)$ps['id'] . '">';
-            echo '<button type="submit" name="decline_reason" value="' . bm_h($code) . '" class="btn btn-sm btn-danger" ' . bm_parent_confirm_attr($code) . '>' . bm_h($lab) . '</button></form>';
-        }
-    } elseif ($st === 'pending') {
-        echo '<form method="post" class="inline"><button type="submit" name="mark_cash" value="' . (int)$ps['id'] . '" class="btn btn-sm btn-primary" ' . bm_parent_confirm_attr('mark_cash') . '>Payment received</button></form>';
-    }
-    echo '<form method="post" action="parent-edit.php" class="inline" onsubmit="return confirm(\'Remove this parent entry from the tournament, letter and Excel?\');">';
-    echo '<input type="hidden" name="id" value="' . (int)$ps['id'] . '">';
-    echo '<button type="submit" name="delete_parent" value="1" class="btn btn-sm btn-danger">Remove</button></form>';
-    echo '</td></tr>';
+    echo '</div></details>';
+    echo '<form method="post" class="inline"><button type="submit" name="accept_paid" value="' . (int)$ps['id'] . '" class="btn btn-sm btn-primary" ' . bm_parent_confirm_attr('accept_paid') . '>Accept</button></form>';
+    echo '<form method="post" class="inline"><button type="submit" name="accept_pending" value="' . (int)$ps['id'] . '" class="btn btn-sm" ' . bm_parent_confirm_attr('accept_pending') . '>Payment pending</button></form>';
+    echo '</div></article>';
 };
 
 $dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
@@ -273,29 +266,21 @@ require __DIR__ . '/includes/header.php';
     <input id="parent-link" type="text" readonly value="<?= bm_h($parentLink) ?>">
     <button type="button" class="btn btn-primary" id="copy-parent-link">Copy link</button>
   </div>
-  <?php if ($parentRows): ?>
-  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s), grouped by the payment date the parent entered so you can match the bank statement. Each Accept or Decline asks you to confirm first.</p>
   <?php if ($reviewByDate): ?>
-  <h3 class="date-band">Awaiting check — by payment date</h3>
+  <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Check date-wise against the bank statement. Decline opens four mismatch reasons. Accept and Decline ask you to confirm first.</p>
   <?php foreach ($reviewByDate as $dateKey => $list): ?>
-  <p class="date-band"><strong>Payment date <?= $dateKey === '_none' ? 'not given' : bm_h(bm_fmt_date($dateKey)) ?></strong> · <?= count($list) ?></p>
-  <table class="table">
-    <thead><tr><th>Pay date</th><th>UTR</th><th>Sender</th><th>₹</th><th>Player</th><th>Age</th><th>Events</th><th>Status</th><th></th></tr></thead>
-    <tbody>
-    <?php foreach ($list as $ps) { $renderParentRow($ps); } ?>
-    </tbody>
-  </table>
+  <details class="review-date" open>
+    <summary class="review-date-head">
+      <span>Payment date <?= $dateKey === '_none' ? 'not given' : bm_h(bm_fmt_date($dateKey)) ?></span>
+      <span class="review-count"><?= count($list) ?></span>
+    </summary>
+    <div class="review-date-body">
+    <?php foreach ($list as $i => $ps) { $renderReviewRow($ps, $i + 1); } ?>
+    </div>
+  </details>
   <?php endforeach; ?>
-  <?php endif; ?>
-  <?php if ($otherParentRows): ?>
-  <h3 class="date-band">Already decided</h3>
-  <table class="table">
-    <thead><tr><th>Pay date</th><th>UTR</th><th>Sender</th><th>₹</th><th>Player</th><th>Age</th><th>Events</th><th>Status</th><th></th></tr></thead>
-    <tbody>
-    <?php foreach ($otherParentRows as $ps) { $renderParentRow($ps); } ?>
-    </tbody>
-  </table>
-  <?php endif; ?>
+  <?php elseif ($parentRows): ?>
+  <p class="hint" style="margin-top:0.85rem;">No entries waiting for a bank-statement check. Open <a href="confirmed.php?id=<?= $id ?>">Confirmed entries</a> for accepted players.</p>
   <?php endif; ?>
 </section>
 <script>
@@ -309,6 +294,12 @@ require __DIR__ . '/includes/header.php';
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(t).then(ok).catch(function(){ inp.select(); document.execCommand('copy'); ok(); });
     } else { inp.select(); document.execCommand('copy'); ok(); }
+  });
+  document.querySelectorAll('.drop').forEach(function(d){
+    d.addEventListener('toggle', function(){
+      if (!d.open) return;
+      document.querySelectorAll('.drop').forEach(function(o){ if (o !== d) o.open = false; });
+    });
   });
 })();
 </script>

@@ -40,6 +40,6 @@ $parentCode = bm_own_parent_code($token);
 $wrapClass = 'wrap-wide';
 $pageTitle = $tournament['name'] . ' · Confirmed entries';
 require __DIR__ . '/includes/header.php';
-bm_parent_top_bar($token, $parentCode);
+bm_parent_top_bar($token, $parentCode, 'confirmed');
 require __DIR__ . '/includes/browse-entries.php';
 require __DIR__ . '/includes/footer.php';

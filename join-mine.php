@@ -61,7 +61,7 @@ $blockPlayer = static function (string $title, array $pl): void {
   .letter-sheet { box-shadow: none; border: none; margin: 0; padding: 12mm 14mm; }
 }
 </style>
-<div class="no-print"><?php bm_parent_top_bar($token, $code); ?></div>
+<div class="no-print"><?php bm_parent_top_bar($token, $code, 'new'); ?></div>
 <section class="page-head no-print">
   <div>
     <p class="eyebrow">Your entries only</p>

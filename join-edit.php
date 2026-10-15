@@ -119,13 +119,13 @@ foreach ($sub['events'] as $ec) {
 $payStatus = (string)($sub['payment_status'] ?? 'na');
 $declineReason = (string)($sub['decline_reason'] ?? '');
 $canFixPay = in_array($payStatus, ['review', 'declined'], true);
-$emptyDate = $payStatus === 'declined' && $declineReason === 'date_mismatch';
-$emptyUtr = $payStatus === 'declined' && $declineReason === 'utr_mismatch';
-$emptySender = $payStatus === 'declined' && $declineReason === 'sender_mismatch';
+$emptyDate = $payStatus === 'declined' && in_array($declineReason, ['date_mismatch', 'amount_mismatch'], true);
+$emptyUtr = $payStatus === 'declined' && in_array($declineReason, ['utr_mismatch', 'amount_mismatch'], true);
+$emptySender = $payStatus === 'declined' && in_array($declineReason, ['sender_mismatch', 'amount_mismatch'], true);
 $pageTitle = 'Edit your entry · ' . $tournament['name'];
 require __DIR__ . '/includes/header.php';
 ?>
-<?php bm_parent_top_bar($token, $code); ?>
+<?php bm_parent_top_bar($token, $code, $payStatus === 'declined' ? 'declined' : 'new'); ?>
 <section class="page-head">
   <div>
     <p class="eyebrow"><?= bm_h($tournament['name']) ?></p>
