@@ -238,6 +238,7 @@ $renderVerifyRow = static function (array $r, bool $showCat): void {
     echo '</tr>';
 };
 ?>
+<?php bm_admin_tournament_nav($tid, 'verify'); ?>
 <section class="page-head no-print">
   <div>
     <p class="eyebrow"><?= bm_h($tournamentName !== '' ? $tournamentName : 'Check') ?></p>

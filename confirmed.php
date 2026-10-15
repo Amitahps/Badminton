@@ -80,8 +80,6 @@ $receiptsUrl = 'receipts.php?id=' . $tid;
 
 $pageTitle = $tournament['name'] . ' · Confirmed entries';
 require __DIR__ . '/includes/header.php';
-?>
-<p class="hint no-print" style="margin-top:0;"><a href="tournament.php?id=<?= $tid ?>">Back to tournament</a></p>
-<?php
+bm_admin_tournament_nav($tid, 'confirmed');
 require __DIR__ . '/includes/browse-entries.php';
 require __DIR__ . '/includes/footer.php';

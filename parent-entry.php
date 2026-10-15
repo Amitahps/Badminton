@@ -1604,6 +1604,39 @@ function bm_parent_output_browse_csv(array $tournament, array $rows, string $lab
     exit;
 }
 
+/**
+ * @param list<array<string,mixed>> $rows
+ */
+function bm_parent_output_unpaid_csv(array $tournament, array $rows, string $label = 'all'): void
+{
+    $safe = preg_replace('/[^A-Za-z0-9_-]+/', '_', $label) ?: 'all';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="unpaid_' . $safe . '.csv"');
+    $out = fopen('php://output', 'w');
+    if ($out === false) {
+        return;
+    }
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, [(string)($tournament['name'] ?? 'Tournament'), 'Not paid online']);
+    fputcsv($out, ['Category', 'Player', 'Events', 'Amount']);
+    $grouped = [];
+    foreach ($rows as $r) {
+        $copy = $r;
+        $copy['_excel_group'] = (string)($r['category_name'] ?? 'Age');
+        $grouped[] = $copy;
+    }
+    bm_csv_write_with_group_gaps($out, $grouped, static function (array $r): array {
+        return [
+            (string)($r['category_name'] ?? ''),
+            (string)($r['full_name'] ?? ''),
+            bm_parent_row_event_labels($r),
+            (string)((int)($r['payment_amount'] ?? 0)),
+        ];
+    });
+    fclose($out);
+    exit;
+}
+
 function bm_parent_choice_cards(string $token, string $parentCode = '', string $current = 'new'): void
 {
     $t = rawurlencode($token);
@@ -1639,6 +1672,126 @@ function bm_parent_choice_cards(string $token, string $parentCode = '', string $
 function bm_parent_top_bar(string $token, string $parentCode = '', string $current = ''): void
 {
     bm_parent_choice_cards($token, $parentCode, $current);
+}
+
+function bm_parent_event_bucket(string $code): ?string
+{
+    if ($code === 'single') {
+        return 'single';
+    }
+    if ($code === 'double_men' || $code === 'double_girls') {
+        return 'double';
+    }
+    if ($code === 'mix_double') {
+        return 'mix';
+    }
+    return null;
+}
+
+/**
+ * Declined entries are left out of totals. After a parent corrects and resubmits,
+ * the same player counts again. If declined again, they drop out of the totals.
+ *
+ * @param list<array<string,mixed>> $rows
+ * @return array<string, array{count:int, amount:int}>
+ */
+function bm_parent_tournament_stats(array $rows): array
+{
+    $z = ['count' => 0, 'amount' => 0];
+    $stats = [
+        'total' => $z,
+        'single' => $z,
+        'double' => $z,
+        'mix' => $z,
+        'confirmed' => $z,
+        'pending' => $z,
+    ];
+    foreach ($rows as $r) {
+        $st = (string)($r['payment_status'] ?? '');
+        if ($st === 'declined') {
+            continue;
+        }
+        $amt = (int)($r['payment_amount'] ?? 0);
+        $stats['total']['count']++;
+        $stats['total']['amount'] += $amt;
+        if (in_array($st, ['paid', 'na'], true)) {
+            $stats['confirmed']['count']++;
+            $stats['confirmed']['amount'] += $amt;
+        } elseif ($st === 'pending') {
+            $stats['pending']['count']++;
+            $stats['pending']['amount'] += $amt;
+        }
+        $buckets = [];
+        foreach (bm_parent_row_event_codes($r) as $code) {
+            $b = bm_parent_event_bucket($code);
+            if ($b !== null) {
+                $buckets[$b] = true;
+            }
+        }
+        $keys = array_keys($buckets);
+        $n = count($keys);
+        if ($n === 0) {
+            continue;
+        }
+        $left = $amt;
+        foreach ($keys as $i => $b) {
+            $share = ($i === $n - 1) ? $left : (int)floor($amt / $n);
+            $left -= $share;
+            $stats[$b]['count']++;
+            $stats[$b]['amount'] += $share;
+        }
+    }
+    return $stats;
+}
+
+function bm_parent_render_fee_summary(array $stats): void
+{
+    $cell = static function (array $s): string {
+        return (int)$s['count'] . ' · ' . bm_rupees((int)$s['amount']);
+    };
+    echo '<section class="fee-summary">';
+    echo '<div class="fee-card">';
+    echo '<h3>Total entries received</h3>';
+    echo '<div class="nums">' . (int)$stats['total']['count'] . ' <small>' . bm_h(bm_rupees((int)$stats['total']['amount'])) . '</small></div>';
+    echo '<div class="fee-split">';
+    echo '<div><span>Single</span><strong>' . bm_h($cell($stats['single'])) . '</strong></div>';
+    echo '<div><span>Doubles</span><strong>' . bm_h($cell($stats['double'])) . '</strong></div>';
+    echo '<div><span>Mix</span><strong>' . bm_h($cell($stats['mix'])) . '</strong></div>';
+    echo '</div></div>';
+    echo '<div class="fee-card">';
+    echo '<h3>Confirmed entries</h3>';
+    echo '<div class="nums">' . (int)$stats['confirmed']['count'] . ' <small>' . bm_h(bm_rupees((int)$stats['confirmed']['amount'])) . '</small></div>';
+    echo '<p class="muted" style="margin:0.45rem 0 0;">Accepted with online payment, or free.</p>';
+    echo '</div>';
+    echo '<div class="fee-card">';
+    echo '<h3>Pending / not paid online</h3>';
+    echo '<div class="nums">' . (int)$stats['pending']['count'] . ' <small>' . bm_h(bm_rupees((int)$stats['pending']['amount'])) . '</small></div>';
+    echo '<p class="muted" style="margin:0.45rem 0 0;">Accepted without online payment. Collect on the day.</p>';
+    echo '</div></section>';
+}
+
+function bm_admin_tournament_nav(int $tid, string $current = ''): void
+{
+    if ($tid <= 0) {
+        return;
+    }
+    $backHref = $current === 'tournament' ? 'tournaments.php' : ('tournament.php?id=' . $tid);
+    $backLabel = $current === 'tournament' ? 'Back to list' : 'Back';
+    $items = [
+        'tournament' => ['href' => 'tournament.php?id=' . $tid, 'label' => 'Tournament'],
+        'confirmed' => ['href' => 'confirmed.php?id=' . $tid, 'label' => 'Confirmed'],
+        'declined' => ['href' => 'declined.php?id=' . $tid, 'label' => 'Declined'],
+        'unpaid' => ['href' => 'unpaid.php?id=' . $tid, 'label' => 'Not paid online'],
+        'verify' => ['href' => 'parent-verify.php?tournament_id=' . $tid, 'label' => 'Verify'],
+        'report' => ['href' => 'report.php?tournament_id=' . $tid, 'label' => 'Report'],
+    ];
+    echo '<nav class="page-switch no-print">';
+    echo '<a class="btn" href="' . bm_h($backHref) . '">' . bm_h($backLabel) . '</a>';
+    foreach ($items as $key => $it) {
+        $cls = 'btn' . ($current === $key ? ' btn-primary' : '');
+        echo '<a class="' . $cls . '" href="' . bm_h($it['href']) . '">' . bm_h($it['label']) . '</a>';
+    }
+    echo '</nav>';
 }
 
 function bm_parent_load_by_id(PDO $pdo, int $id, int $tournamentId = 0): ?array

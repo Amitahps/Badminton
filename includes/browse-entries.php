@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /** @var array<string,mixed> $tournament */
-/** @var 'confirmed'|'receipts'|'declined' $browseMode */
+/** @var 'confirmed'|'receipts'|'declined'|'unpaid' $browseMode */
 /** @var array<string, list<array<string,mixed>>> $grouped */
 /** @var string $q */
 /** @var string $filterAction */
@@ -33,6 +33,7 @@ foreach ($grouped as $list) {
 }
 $isReceipts = $browseMode === 'receipts';
 $isDeclined = $browseMode === 'declined';
+$isUnpaid = $browseMode === 'unpaid';
 $exportBase = $filterHidden;
 if ($q !== '') {
     $exportBase['q'] = $q;
@@ -51,6 +52,7 @@ foreach ($grouped as $catName => $list) {
 $renderConfirmedCells = static function (array $row, string $mode, string $token): void {
     $isReceipts = $mode === 'receipts';
     $isDeclined = $mode === 'declined';
+    $isUnpaid = $mode === 'unpaid';
     echo '<td><strong>' . bm_h((string)($row['full_name'] ?? '')) . '</strong>';
     if (!$isReceipts && trim((string)($row['d_full_name'] ?? '')) !== '') {
         echo '<div class="muted">Doubles: ' . bm_h((string)$row['d_full_name']) . '</div>';
@@ -63,6 +65,11 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
         echo '<td>' . bm_h(bm_parent_row_event_labels($row)) . '</td>';
         echo '<td>' . bm_h((string)($row['payment_utr'] ?? '')) . '</td>';
         echo '<td class="right"><a class="btn btn-sm btn-primary" href="join-receipt.php?t=' . bm_h(urlencode($token)) . '&amp;r=' . bm_h(urlencode((string)$row['receipt_code'])) . '">Download receipt</a></td>';
+        return;
+    }
+    if ($isUnpaid) {
+        echo '<td>' . bm_h(bm_parent_row_event_labels($row)) . '</td>';
+        echo '<td>' . bm_h(bm_rupees((int)($row['payment_amount'] ?? 0))) . '</td>';
         return;
     }
     echo '<td>' . bm_h(bm_gender_label((string)($row['gender'] ?? ''))) . '</td>';
@@ -94,6 +101,8 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
       Receipts for players whose online payment the organiser has confirmed. Entries still pending cash are not listed.
     <?php elseif ($isDeclined): ?>
       Your payment / sender name, payment date / amount sent did not match the bank statement. Open your player details, correct the empty field and submit again.
+    <?php elseif ($isUnpaid): ?>
+      Entries accepted without online payment. Names, event and amount. Collect cash on the tournament day.
     <?php else: ?>
       List of entries accepted by officials. Download a receipt only after online payment is confirmed. Copy of receipt is mandatory on the day of tournament.
     <?php endif; ?></p>
@@ -112,6 +121,8 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
         echo 'Receipts';
     } elseif ($isDeclined) {
         echo 'Declined entries';
+    } elseif ($isUnpaid) {
+        echo 'Not paid online';
     } else {
         echo 'Confirmed entries';
     }
@@ -148,6 +159,8 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
     No confirmed online payments yet.
   <?php elseif ($isDeclined): ?>
     No declined entries yet.
+  <?php elseif ($isUnpaid): ?>
+    No entries waiting for cash / not paid online.
   <?php else: ?>
     No confirmed entries yet.
   <?php endif; ?></p>
@@ -159,6 +172,10 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
       <tr>
         <th>Category</th>
         <th>Player</th>
+        <?php if ($isUnpaid): ?>
+        <th>Events</th>
+        <th>Amount</th>
+        <?php else: ?>
         <th>Gender</th>
         <th>BAI ID</th>
         <th>PBI ID</th>
@@ -168,6 +185,7 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
         <th>Events</th>
         <th><?= $isDeclined ? 'Mismatch' : 'Payment' ?></th>
         <th class="no-print"></th>
+        <?php endif; ?>
       </tr>
     </thead>
     <tbody>
@@ -201,6 +219,9 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
             <th>Events</th>
             <th>UTR</th>
             <th></th>
+          <?php elseif ($isUnpaid): ?>
+            <th>Events</th>
+            <th>Amount</th>
           <?php else: ?>
             <th>Gender</th>
             <th>BAI ID</th>

@@ -239,7 +239,9 @@ $dateText = bm_date_range($tournament['date_from'], $tournament['date_to']);
 $wrapClass = 'wrap-wide';
 $pageTitle = $tournament['name'] . ' · Badminton';
 require __DIR__ . '/includes/header.php';
+$feeStats = bm_parent_tournament_stats($parentRows);
 ?>
+<?php bm_admin_tournament_nav($id, 'tournament'); ?>
 <section class="page-head">
   <div>
     <p class="eyebrow">Tournament</p>
@@ -250,6 +252,7 @@ require __DIR__ . '/includes/header.php';
     <a class="btn btn-primary" href="tournament-entries.php?tournament_id=<?= $id ?>">Assign players / categories / events</a>
     <a class="btn" href="confirmed.php?id=<?= $id ?>">Confirmed entries</a>
     <a class="btn" href="declined.php?id=<?= $id ?>">Declined entries</a>
+    <a class="btn" href="unpaid.php?id=<?= $id ?>">Not paid online</a>
     <a class="btn" href="parent-verify.php?tournament_id=<?= $id ?>">Verify / print / Excel</a>
     <a class="btn" href="report.php?tournament_id=<?= $id ?>">Report</a>
     <a class="btn" href="report.php?saved=1&amp;tournament_id=<?= $id ?>&amp;st_tournament=<?= $id ?>#saved-teams">Saved teams</a>
@@ -259,6 +262,7 @@ require __DIR__ . '/includes/header.php';
     <a class="btn" href="tournament-form.php?id=<?= $id ?>">Edit details</a>
   </div>
 </section>
+<?php bm_parent_render_fee_summary($feeStats); ?>
 
 <section class="panel">
   <div class="panel-head"><h2>Parent entry link</h2></div>

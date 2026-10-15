@@ -147,6 +147,9 @@ $clearSavedQs = http_build_query([
 $wrapClass = 'wrap-wide';
 $pageTitle = 'Team report · Badminton';
 require __DIR__ . '/includes/header.php';
+if ($tournamentId > 0) {
+    bm_admin_tournament_nav($tournamentId, 'report');
+}
 ?>
 <section class="page-head">
   <div>

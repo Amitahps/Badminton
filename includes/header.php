@@ -15,7 +15,7 @@ $script = basename($_SERVER['PHP_SELF'] ?? '');
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/app.css?v=parent11">
+  <link rel="stylesheet" href="assets/css/app.css?v=parent12">
 </head>
 <body>
 <?php if ($loggedIn): ?>
@@ -31,7 +31,7 @@ $script = basename($_SERVER['PHP_SELF'] ?? '');
     <a href="index.php" class="<?= $script === 'index.php' ? 'active' : '' ?>">Home</a>
     <a href="categories.php" class="<?= strpos($script, 'categor') === 0 ? 'active' : '' ?>">Age Categories</a>
     <a href="players.php" class="<?= strpos($script, 'player') === 0 ? 'active' : '' ?>">Players</a>
-    <a href="tournaments.php" class="<?= strpos($script, 'tournament') === 0 || in_array($script, ['letter.php', 'letter-select.php', 'confirmed.php', 'declined.php', 'parent-verify.php', 'report.php'], true) || strpos($script, 'parent-') === 0 ? 'active' : '' ?>">Tournaments</a>
+    <a href="tournaments.php" class="<?= strpos($script, 'tournament') === 0 || in_array($script, ['letter.php', 'letter-select.php', 'confirmed.php', 'declined.php', 'unpaid.php', 'parent-verify.php', 'report.php'], true) || strpos($script, 'parent-') === 0 ? 'active' : '' ?>">Tournaments</a>
     <a href="backup.php" class="<?= $script === 'backup.php' ? 'active' : '' ?>">Backup</a>
     <a href="change-password.php">Password</a>
     <a class="logout" href="logout.php">Logout</a>
