@@ -54,6 +54,30 @@ function bm_require_login(): void
     }
 }
 
+function bm_remember_tournament_id(int $id): void
+{
+    if ($id <= 0) {
+        return;
+    }
+    bm_boot_session();
+    $_SESSION['bm_tournament_id'] = $id;
+}
+
+function bm_current_tournament_id(): int
+{
+    bm_boot_session();
+    return (int)($_SESSION['bm_tournament_id'] ?? 0);
+}
+
+function bm_resolve_tournament_id(int $requested): int
+{
+    if ($requested > 0) {
+        bm_remember_tournament_id($requested);
+        return $requested;
+    }
+    return bm_current_tournament_id();
+}
+
 function bm_login(string $username, string $password): bool
 {
     $pdo = bm_db();

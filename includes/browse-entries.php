@@ -8,6 +8,8 @@ declare(strict_types=1);
 /** @var array<string,string> $filterHidden */
 /** @var string $token */
 /** @var bool $openAll */
+/** @var string $view */
+/** @var string $receiptsUrl */
 
 $browseMode = $browseMode ?? 'confirmed';
 $grouped = $grouped ?? [];
@@ -15,10 +17,19 @@ $q = $q ?? '';
 $filterAction = $filterAction ?? '';
 $filterHidden = $filterHidden ?? [];
 $token = $token ?? '';
-$openAll = !empty($openAll) || trim($q) !== '';
+$view = $view ?? 'category';
+if (!in_array($view, ['all', 'category'], true)) {
+    $view = 'category';
+}
+$receiptsUrl = $receiptsUrl ?? '';
+$openAll = !empty($openAll) || trim($q) !== '' || $view === 'all';
 $total = 0;
+$flat = [];
 foreach ($grouped as $list) {
     $total += count($list);
+    foreach ($list as $row) {
+        $flat[] = $row;
+    }
 }
 $isReceipts = $browseMode === 'receipts';
 $exportBase = $filterHidden;
@@ -26,6 +37,8 @@ if ($q !== '') {
     $exportBase['q'] = $q;
 }
 $excelAll = $filterAction . '?' . http_build_query(array_merge($exportBase, ['format' => 'csv']));
+$viewAllUrl = $filterAction . '?' . http_build_query(array_merge($exportBase, ['view' => 'all']));
+$viewCatUrl = $filterAction . '?' . http_build_query(array_merge($exportBase, ['view' => 'category']));
 $catChoices = [];
 foreach ($grouped as $catName => $list) {
     $cid = (int)(($list[0]['category_id'] ?? 0));
@@ -33,6 +46,31 @@ foreach ($grouped as $catName => $list) {
         $catChoices[$cid] = $catName;
     }
 }
+
+$renderConfirmedCells = static function (array $row, bool $isReceipts, string $token): void {
+    echo '<td><strong>' . bm_h((string)($row['full_name'] ?? '')) . '</strong>';
+    if (!$isReceipts && trim((string)($row['d_full_name'] ?? '')) !== '') {
+        echo '<div class="muted">Doubles: ' . bm_h((string)$row['d_full_name']) . '</div>';
+    }
+    if (!$isReceipts && trim((string)($row['m_full_name'] ?? '')) !== '') {
+        echo '<div class="muted">Mix: ' . bm_h((string)$row['m_full_name']) . '</div>';
+    }
+    echo '</td>';
+    if ($isReceipts) {
+        echo '<td>' . bm_h(bm_parent_row_event_labels($row)) . '</td>';
+        echo '<td>' . bm_h((string)($row['payment_utr'] ?? '')) . '</td>';
+        echo '<td class="right"><a class="btn btn-sm btn-primary" href="join-receipt.php?t=' . bm_h(urlencode($token)) . '&amp;r=' . bm_h(urlencode((string)$row['receipt_code'])) . '">Download receipt</a></td>';
+        return;
+    }
+    echo '<td>' . bm_h(bm_gender_label((string)($row['gender'] ?? ''))) . '</td>';
+    echo '<td>' . bm_h((string)($row['bai_id'] ?? '')) . '</td>';
+    echo '<td>' . bm_h((string)($row['pbi_id'] ?? '')) . '</td>';
+    echo '<td>' . bm_h((string)(($row['player_father'] ?? '') !== '' ? $row['player_father'] : ($row['father_name'] ?? ''))) . '</td>';
+    echo '<td>' . bm_h((string)(($row['mobile'] ?? '') !== '' ? $row['mobile'] : ($row['contact_mobile'] ?? ''))) . '</td>';
+    echo '<td>' . bm_h((string)($row['address'] ?? '')) . '</td>';
+    echo '<td>' . bm_h(bm_parent_row_event_labels($row)) . '</td>';
+    echo '<td>' . bm_h(bm_parent_payment_label((string)($row['payment_status'] ?? ''), (int)($row['payment_amount'] ?? 0))) . '</td>';
+};
 ?>
 <section class="page-head">
   <div>
@@ -45,12 +83,17 @@ foreach ($grouped as $catName => $list) {
   </div>
   <?php if (!$isReceipts && $total > 0): ?>
   <div class="page-actions no-print">
-    <button type="button" class="btn btn-primary" data-print-all>Print / PDF — all</button>
-    <a class="btn" href="<?= bm_h($excelAll) ?>">Excel — all</a>
+    <a class="btn <?= $view === 'all' ? 'btn-primary' : '' ?>" href="<?= bm_h($viewAllUrl) ?>">All entries</a>
+    <a class="btn <?= $view === 'category' ? 'btn-primary' : '' ?>" href="<?= bm_h($viewCatUrl) ?>">Category wise</a>
+    <button type="button" class="btn" data-print-all>Print / PDF</button>
+    <a class="btn" href="<?= bm_h($excelAll) ?>">Excel</a>
+    <?php if ($receiptsUrl !== ''): ?>
+      <a class="btn btn-primary" href="<?= bm_h($receiptsUrl) ?>">Download receipt</a>
+    <?php endif; ?>
   </div>
   <?php endif; ?>
 </section>
-<p class="print-only print-title"><?= bm_h((string)($tournament['name'] ?? 'Tournament')) ?><br>Confirmed entries<?php if ($q !== ''): ?> · <?= bm_h($q) ?><?php endif; ?></p>
+<p class="print-only print-title"><?= bm_h((string)($tournament['name'] ?? 'Tournament')) ?><br><?= $isReceipts ? 'Receipts' : 'Confirmed entries' ?><?php if ($q !== ''): ?> · <?= bm_h($q) ?><?php endif; ?></p>
 <section class="panel no-print">
   <form method="get" action="<?= bm_h($filterAction) ?>" class="filters">
     <?php foreach ($filterHidden as $k => $v): ?>
@@ -84,6 +127,33 @@ foreach ($grouped as $catName => $list) {
   <?php else: ?>
     No confirmed entries yet.
   <?php endif; ?></p>
+</section>
+<?php elseif (!$isReceipts && $view === 'all'): ?>
+<section class="panel" id="all-entries">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th>Player</th>
+        <th>Gender</th>
+        <th>BAI ID</th>
+        <th>PBI ID</th>
+        <th>Father</th>
+        <th>Contact</th>
+        <th>District</th>
+        <th>Events</th>
+        <th>Payment</th>
+      </tr>
+    </thead>
+    <tbody>
+    <?php foreach ($flat as $row): ?>
+      <tr data-cat-id="<?= (int)($row['category_id'] ?? 0) ?>">
+        <td><?= bm_h((string)($row['category_name'] ?? '')) ?></td>
+        <?php $renderConfirmedCells($row, false, $token); ?>
+      </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
 </section>
 <?php else: ?>
   <?php foreach ($grouped as $catName => $list): ?>
@@ -120,32 +190,8 @@ foreach ($grouped as $catName => $list) {
       </thead>
       <tbody>
       <?php foreach ($list as $row): ?>
-        <tr>
-          <td>
-            <strong><?= bm_h((string)($row['full_name'] ?? '')) ?></strong>
-            <?php if (!$isReceipts && trim((string)($row['d_full_name'] ?? '')) !== ''): ?>
-              <div class="muted">Doubles: <?= bm_h((string)$row['d_full_name']) ?></div>
-            <?php endif; ?>
-            <?php if (!$isReceipts && trim((string)($row['m_full_name'] ?? '')) !== ''): ?>
-              <div class="muted">Mix: <?= bm_h((string)$row['m_full_name']) ?></div>
-            <?php endif; ?>
-          </td>
-          <?php if ($isReceipts): ?>
-            <td><?= bm_h(bm_parent_row_event_labels($row)) ?></td>
-            <td><?= bm_h((string)($row['payment_utr'] ?? '')) ?></td>
-            <td class="right">
-              <a class="btn btn-sm btn-primary" href="join-receipt.php?t=<?= bm_h(urlencode($token)) ?>&amp;r=<?= bm_h(urlencode((string)$row['receipt_code'])) ?>">Download receipt</a>
-            </td>
-          <?php else: ?>
-            <td><?= bm_h(bm_gender_label((string)($row['gender'] ?? ''))) ?></td>
-            <td><?= bm_h((string)($row['bai_id'] ?? '')) ?></td>
-            <td><?= bm_h((string)($row['pbi_id'] ?? '')) ?></td>
-            <td><?= bm_h((string)(($row['player_father'] ?? '') !== '' ? $row['player_father'] : ($row['father_name'] ?? ''))) ?></td>
-            <td><?= bm_h((string)(($row['mobile'] ?? '') !== '' ? $row['mobile'] : ($row['contact_mobile'] ?? ''))) ?></td>
-            <td><?= bm_h((string)($row['address'] ?? '')) ?></td>
-            <td><?= bm_h(bm_parent_row_event_labels($row)) ?></td>
-            <td><?= bm_h(bm_parent_payment_label((string)($row['payment_status'] ?? ''), (int)($row['payment_amount'] ?? 0))) ?></td>
-          <?php endif; ?>
+        <tr data-cat-id="<?= $cid ?>">
+          <?php $renderConfirmedCells($row, $isReceipts, $token); ?>
         </tr>
       <?php endforeach; ?>
       </tbody>
@@ -158,9 +204,11 @@ foreach ($grouped as $catName => $list) {
 (function(){
   var excelBase = <?= json_encode($filterAction . '?' . http_build_query($exportBase), JSON_UNESCAPED_UNICODE) ?>;
   function cats(){ return Array.prototype.slice.call(document.querySelectorAll('.cat-drop[data-cat-id]')); }
+  function rows(){ return Array.prototype.slice.call(document.querySelectorAll('tr[data-cat-id]')); }
   function resetPrint(){
     document.body.classList.remove('print-one');
     cats().forEach(function(d){ d.classList.remove('print-hide'); });
+    rows().forEach(function(r){ r.classList.remove('print-hide'); });
   }
   function printAll(){
     resetPrint();
@@ -174,6 +222,9 @@ foreach ($grouped as $catName => $list) {
       var match = String(d.getAttribute('data-cat-id')) === String(id);
       d.open = match;
       d.classList.toggle('print-hide', !match);
+    });
+    rows().forEach(function(r){
+      r.classList.toggle('print-hide', String(r.getAttribute('data-cat-id')) !== String(id));
     });
     window.print();
   }

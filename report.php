@@ -5,10 +5,25 @@ bm_require_login();
 $pdo = bm_db();
 
 $tournamentId = (int)($_GET['tournament_id'] ?? 0);
+if ($tournamentId <= 0) {
+    $tournamentId = bm_current_tournament_id();
+}
+if ($tournamentId > 0) {
+    bm_remember_tournament_id($tournamentId);
+}
 $categoryId = (int)($_GET['category_id'] ?? 0);
 
 $tournaments = $pdo->query('SELECT id, name, date_from FROM tournaments ORDER BY date_from DESC, id DESC')->fetchAll();
-$categories = $pdo->query('SELECT * FROM age_categories ORDER BY sort_order, name')->fetchAll();
+$categories = $tournamentId > 0
+    ? bm_tournament_categories($pdo, $tournamentId)
+    : $pdo->query('SELECT * FROM age_categories ORDER BY sort_order, name')->fetchAll();
+$tournamentName = '';
+foreach ($tournaments as $t) {
+    if ((int)$t['id'] === $tournamentId) {
+        $tournamentName = (string)$t['name'];
+        break;
+    }
+}
 
 $sql = "
     SELECT t.event_code, t.tournament_id,
@@ -93,6 +108,9 @@ if (isset($_GET['format']) && $_GET['format'] === 'csv') {
 }
 
 $stTournament = (int)($_GET['st_tournament'] ?? 0);
+if ($stTournament <= 0 && $tournamentId > 0) {
+    $stTournament = $tournamentId;
+}
 $stCategory = (int)($_GET['st_category'] ?? 0);
 $stEvent = trim((string)($_GET['st_event'] ?? ''));
 $stName = trim((string)($_GET['player_name'] ?? ''));
@@ -128,7 +146,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow">Report</p>
     <h1>Team totals</h1>
-    <p class="lede">Saved teams: Boys Singles, Girls Singles, Boys Doubles, Girls Doubles, and Mix Doubles. View all tournaments, or filter by tournament and age category.</p>
+    <p class="lede"><?= $tournamentName !== '' ? bm_h($tournamentName) . ' — ' : '' ?>Saved teams: Boys Singles, Girls Singles, Boys Doubles, Girls Doubles, and Mix Doubles<?= $tournamentId > 0 ? ' for this tournament.' : '.' ?></p>
   </div>
   <div class="page-actions no-print">
     <button type="button" class="btn" onclick="window.print()">Print</button>
@@ -145,12 +163,16 @@ require __DIR__ . '/includes/header.php';
     <input type="hidden" name="st_category" value="<?= $stCategory ?>">
     <input type="hidden" name="st_event" value="<?= bm_h($stEvent) ?>">
     <input type="hidden" name="player_name" value="<?= bm_h($stName) ?>">
+    <?php if ($tournamentId > 0): ?>
+      <input type="hidden" name="tournament_id" value="<?= $tournamentId ?>">
+    <?php else: ?>
     <select name="tournament_id">
       <option value="0">All tournaments</option>
       <?php foreach ($tournaments as $t): ?>
         <option value="<?= (int)$t['id'] ?>" <?= $tournamentId === (int)$t['id'] ? 'selected' : '' ?>><?= bm_h($t['name']) ?></option>
       <?php endforeach; ?>
     </select>
+    <?php endif; ?>
     <select name="category_id">
       <option value="0">All age categories</option>
       <?php foreach ($categories as $c): ?>
@@ -224,12 +246,16 @@ require __DIR__ . '/includes/header.php';
       <input type="hidden" name="saved" value="1">
       <input type="hidden" name="tournament_id" value="<?= $tournamentId ?>">
       <input type="hidden" name="category_id" value="<?= $categoryId ?>">
+      <?php if ($tournamentId > 0): ?>
+        <input type="hidden" name="st_tournament" value="<?= $stTournament ?>">
+      <?php else: ?>
       <select name="st_tournament">
         <option value="0">All tournaments</option>
         <?php foreach ($tournaments as $t): ?>
           <option value="<?= (int)$t['id'] ?>" <?= $stTournament === (int)$t['id'] ? 'selected' : '' ?>><?= bm_h($t['name']) ?></option>
         <?php endforeach; ?>
       </select>
+      <?php endif; ?>
       <select name="st_category">
         <option value="0">All age categories</option>
         <?php foreach ($categories as $c): ?>

@@ -5,7 +5,14 @@ bm_require_login();
 $pdo = bm_db();
 
 $tid = (int)($_GET['id'] ?? $_GET['tournament_id'] ?? 0);
+if ($tid <= 0) {
+    $tid = bm_current_tournament_id();
+}
 $q = trim((string)($_GET['q'] ?? ''));
+$view = trim((string)($_GET['view'] ?? 'category'));
+if (!in_array($view, ['all', 'category'], true)) {
+    $view = 'category';
+}
 $wrapClass = 'wrap-wide';
 
 if ($tid <= 0) {
@@ -52,6 +59,7 @@ if (!$tournament) {
     bm_redirect('confirmed.php');
 }
 
+bm_remember_tournament_id($tid);
 $token = bm_tournament_ensure_public_token($pdo, $tournament);
 $fmt = strtolower(trim((string)($_GET['format'] ?? '')));
 $catId = (int)($_GET['category_id'] ?? 0);
@@ -67,12 +75,13 @@ if ($fmt === 'csv' || $fmt === 'excel') {
 $grouped = bm_parent_group_by_category($rows);
 $browseMode = 'confirmed';
 $filterAction = 'confirmed.php';
-$filterHidden = ['id' => (string)$tid];
+$filterHidden = ['id' => (string)$tid, 'view' => $view];
+$receiptsUrl = 'receipts.php?id=' . $tid;
 
 $pageTitle = $tournament['name'] . ' · Confirmed entries';
 require __DIR__ . '/includes/header.php';
 ?>
-<p class="hint no-print" style="margin-top:0;"><a href="confirmed.php">All tournaments</a> · <a href="tournament.php?id=<?= $tid ?>">Back to tournament</a> · <a href="receipts.php?id=<?= $tid ?>">Download receipts</a></p>
+<p class="hint no-print" style="margin-top:0;"><a href="tournament.php?id=<?= $tid ?>">Back to tournament</a></p>
 <?php
 require __DIR__ . '/includes/browse-entries.php';
 require __DIR__ . '/includes/footer.php';

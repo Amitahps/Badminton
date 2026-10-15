@@ -12,6 +12,7 @@ if (!$tournament) {
     bm_flash('error', 'Tournament not found.');
     bm_redirect('tournaments.php');
 }
+bm_remember_tournament_id($id);
 
 $categories = bm_tournament_categories($pdo, $id);
 
@@ -255,8 +256,9 @@ require __DIR__ . '/includes/header.php';
   <div class="page-actions">
     <a class="btn btn-primary" href="tournament-entries.php?tournament_id=<?= $id ?>">Assign players / categories / events</a>
     <a class="btn" href="confirmed.php?id=<?= $id ?>">Confirmed entries</a>
-    <a class="btn" href="receipts.php?id=<?= $id ?>">Download receipts</a>
     <a class="btn" href="parent-verify.php?tournament_id=<?= $id ?>">Verify / print / Excel</a>
+    <a class="btn" href="report.php?tournament_id=<?= $id ?>">Report</a>
+    <a class="btn" href="report.php?saved=1&amp;tournament_id=<?= $id ?>&amp;st_tournament=<?= $id ?>#saved-teams">Saved teams</a>
     <a class="btn" href="letter.php?id=<?= $id ?>">Share letter PDF</a>
     <a class="btn" href="letter.php?id=<?= $id ?>&amp;for=parents">Share parents &amp; coaches PDF</a>
     <a class="btn" href="letter-select.php?tournament_id=<?= $id ?>">Select teams &amp; export letter</a>

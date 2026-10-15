@@ -17,6 +17,10 @@ if (!$tournament) {
 
 $fmt = strtolower(trim((string)($_GET['format'] ?? '')));
 $catId = (int)($_GET['category_id'] ?? 0);
+$view = trim((string)($_GET['view'] ?? 'category'));
+if (!in_array($view, ['all', 'category'], true)) {
+    $view = 'category';
+}
 $rows = bm_parent_list_for_browse($pdo, (int)$tournament['id'], ['paid', 'pending', 'na'], $q);
 if ($fmt === 'csv' || $fmt === 'excel') {
     $export = bm_parent_filter_by_category_id($rows, $catId);
@@ -29,7 +33,8 @@ if ($fmt === 'csv' || $fmt === 'excel') {
 $grouped = bm_parent_group_by_category($rows);
 $browseMode = 'confirmed';
 $filterAction = 'join-confirmed.php';
-$filterHidden = ['t' => $token];
+$filterHidden = ['t' => $token, 'view' => $view];
+$receiptsUrl = 'join-receipts.php?t=' . rawurlencode($token);
 $parentCode = bm_own_parent_code($token);
 
 $wrapClass = 'wrap-wide';

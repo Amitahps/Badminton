@@ -27,9 +27,9 @@ require __DIR__ . '/includes/header.php';
     <p class="lede">Keep a one-time player name list. For each tournament, choose which players join which age categories and events, form teams, then export the participating list.</p>
   </div>
   <div class="page-actions">
+    <?php $homeTid = bm_current_tournament_id(); ?>
     <a class="btn btn-primary" href="tournament-form.php">New tournament</a>
-    <a class="btn" href="confirmed.php">Confirmed entries</a>
-    <a class="btn" href="receipts.php">Download receipts</a>
+    <a class="btn" href="confirmed.php<?= $homeTid > 0 ? '?id=' . $homeTid : '' ?>">Confirmed entries</a>
     <a class="btn" href="player-form.php">Add player</a>
   </div>
 </section>

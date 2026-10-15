@@ -5,6 +5,9 @@ bm_require_login();
 $pdo = bm_db();
 
 $tid = (int)($_GET['id'] ?? $_GET['tournament_id'] ?? 0);
+if ($tid <= 0) {
+    $tid = bm_current_tournament_id();
+}
 $q = trim((string)($_GET['q'] ?? ''));
 $wrapClass = 'wrap-wide';
 
@@ -52,6 +55,7 @@ if (!$tournament) {
     bm_redirect('receipts.php');
 }
 
+bm_remember_tournament_id($tid);
 $token = bm_tournament_ensure_public_token($pdo, $tournament);
 $rows = bm_parent_list_for_browse($pdo, $tid, ['paid'], $q);
 $grouped = bm_parent_group_by_category($rows);
@@ -62,7 +66,7 @@ $filterHidden = ['id' => (string)$tid];
 $pageTitle = $tournament['name'] . ' · Download receipts';
 require __DIR__ . '/includes/header.php';
 ?>
-<p class="hint no-print" style="margin-top:0;"><a href="receipts.php">All tournaments</a> · <a href="tournament.php?id=<?= $tid ?>">Back to tournament</a> · <a href="confirmed.php?id=<?= $tid ?>">Confirmed entries</a></p>
+<p class="hint no-print" style="margin-top:0;"><a href="confirmed.php?id=<?= $tid ?>">Back to confirmed list</a> · <a href="tournament.php?id=<?= $tid ?>">Back to tournament</a></p>
 <?php
 require __DIR__ . '/includes/browse-entries.php';
 require __DIR__ . '/includes/footer.php';

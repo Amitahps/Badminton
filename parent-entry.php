@@ -534,14 +534,7 @@ function bm_assert_unique_utr(PDO $pdo, string $utr, int $exceptId = 0): void
     $st = $pdo->prepare("SELECT id FROM parent_submissions WHERE payment_utr = ? AND id != ? AND payment_status IN ('review','pending','paid') LIMIT 1");
     $st->execute([$utr, $exceptId]);
     if ($st->fetch()) {
-        throw new RuntimeException('This UTR / reference number was already used, or is only a small change from one already used. Entry not saved.');
-    }
-    $st = $pdo->prepare("SELECT payment_utr FROM parent_submissions WHERE id != ? AND payment_status IN ('review','pending','paid') AND payment_utr IS NOT NULL AND TRIM(payment_utr) != ''");
-    $st->execute([$exceptId]);
-    foreach ($st->fetchAll() as $row) {
-        if (bm_utr_too_similar($utr, (string)$row['payment_utr'])) {
-            throw new RuntimeException('This UTR / reference number was already used, or is only a small change from one already used. Entry not saved.');
-        }
+        throw new RuntimeException('This UTR / reference number was already used. Entry not saved.');
     }
 }
 
@@ -566,36 +559,12 @@ function bm_payment_on_letter(?string $status): bool
     return in_array((string)$status, ['paid', 'pending'], true);
 }
 
-/** True when two digit UTRs are the same payment with only a small change. */
+/** True only when two UTRs are the same digits. Nearby numbers are different payments. */
 function bm_utr_too_similar(string $a, string $b): bool
 {
     $a = preg_replace('/\D+/', '', $a) ?? '';
     $b = preg_replace('/\D+/', '', $b) ?? '';
-    if ($a === '' || $b === '') {
-        return false;
-    }
-    if ($a === $b) {
-        return true;
-    }
-    $za = ltrim($a, '0');
-    $zb = ltrim($b, '0');
-    if ($za !== '' && $za === $zb) {
-        return true;
-    }
-    $la = strlen($a);
-    $lb = strlen($b);
-    $short = $la <= $lb ? $a : $b;
-    $long = $la <= $lb ? $b : $a;
-    $extra = abs($la - $lb);
-    if ($extra > 0 && $extra <= 2 && strlen($short) >= 8 && (str_starts_with($long, $short) || str_ends_with($long, $short) || str_contains($long, $short))) {
-        return true;
-    }
-    $dist = levenshtein($a, $b);
-    if ($dist < 0) {
-        return false;
-    }
-    $allow = min($la, $lb) >= 12 ? 2 : 1;
-    return $dist <= $allow;
+    return $a !== '' && $a === $b;
 }
 
 function bm_upload_sha256(array $file): string
@@ -1522,7 +1491,6 @@ function bm_parent_top_bar(string $token, string $parentCode = ''): void
     echo '<p class="parent-top-links"><a href="join-declined.php?t=' . bm_h($t) . $p . '">Declined entries</a></p>';
     echo '<p class="parent-top-links parent-top-right">';
     echo '<a href="join-confirmed.php?t=' . bm_h($t) . '">Confirmed entries</a>';
-    echo '<a href="join-receipts.php?t=' . bm_h($t) . '">Download receipt</a>';
     echo '</p></div>';
 }
 

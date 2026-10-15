@@ -246,7 +246,7 @@ a { color: var(--court-dark); }
   .page-head h1 { font-size: 1.4rem; }
   a { color: inherit; text-decoration: none; }
   .crop-overlay { display: none !important; }
-  .cat-drop.print-hide { display: none !important; }
+  .cat-drop.print-hide, tr.print-hide { display: none !important; }
   .cat-drop { border: none; margin: 0 0 1rem; break-inside: avoid; }
   .cat-drop > summary { list-style: none; border: none; padding: 0 0 0.4rem; }
   .cat-drop > summary::-webkit-details-marker { display: none; }
