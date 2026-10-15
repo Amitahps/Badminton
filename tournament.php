@@ -55,6 +55,14 @@ if (isset($_POST['decline_reason']) && isset($_POST['decline_id'])) {
     }
     bm_redirect('tournament.php?id=' . $id);
 }
+if (isset($_POST['show_on_website_set'])) {
+    $show = ((string)$_POST['show_on_website_set'] === '1') ? 1 : 0;
+    $pdo->prepare('UPDATE tournaments SET show_on_website=?, updated_at=datetime(\'now\',\'localtime\') WHERE id=?')
+        ->execute([$show, $id]);
+    $tournament['show_on_website'] = $show;
+    bm_flash('success', $show ? 'This tournament is now on the website list.' : 'This tournament is hidden from the website list. You can still send its own link.');
+    bm_redirect('tournament.php?id=' . $id);
+}
 
 $ecStmt = $pdo->prepare('SELECT COUNT(DISTINCT player_id) FROM tournament_entries WHERE tournament_id = ?');
 $ecStmt->execute([$id]);
@@ -265,8 +273,24 @@ $feeStats = bm_parent_tournament_stats($parentRows);
 <?php bm_parent_render_fee_summary($feeStats); ?>
 
 <section class="panel">
-  <div class="panel-head"><h2>Parent entry link</h2></div>
-  <p class="lede">Send this link to parents and coaches. They only see this tournament’s age categories. After save they get a PDF of every player they sent, and can edit mistakes. Assign-players still works as before.</p>
+  <div class="panel-head"><h2>Website list and parent links</h2></div>
+  <p class="lede">The website list link stays the same. Attach it on the PBA Tournament page. Only tournaments you <strong>show</strong> appear there. For a private or non-PBA event, keep it hidden and send this tournament’s own link.</p>
+  <p class="hint" style="margin-top:0;">Website list (always the same)</p>
+  <div class="share-link">
+    <input id="website-list-link" type="text" readonly value="<?= bm_h(bm_public_list_url()) ?>">
+    <button type="button" class="btn" id="copy-website-list">Copy list link</button>
+  </div>
+  <form method="post" class="form-actions" style="margin:0.85rem 0 0.4rem;">
+    <?php if (bm_tournament_show_on_website($tournament)): ?>
+      <p class="hint" style="margin:0 0.5rem 0 0;">Now <strong>showing</strong> on the website list (<?= bm_h(bm_tournament_year($tournament)) ?>).</p>
+      <button type="submit" name="show_on_website_set" value="0" class="btn">Hide from website</button>
+    <?php else: ?>
+      <p class="hint" style="margin:0 0.5rem 0 0;">Now <strong>hidden</strong>. Parents will not see it on the website list.</p>
+      <button type="submit" name="show_on_website_set" value="1" class="btn btn-primary">Show on website</button>
+    <?php endif; ?>
+    <a class="btn" href="open.php" target="_blank" rel="noopener">Open website list</a>
+  </form>
+  <p class="hint">This tournament only (WhatsApp / one event)</p>
   <div class="share-link">
     <input id="parent-link" type="text" readonly value="<?= bm_h($parentLink) ?>">
     <button type="button" class="btn btn-primary" id="copy-parent-link">Copy link</button>
@@ -290,16 +314,20 @@ $feeStats = bm_parent_tournament_stats($parentRows);
 </section>
 <script>
 (function(){
-  var btn = document.getElementById('copy-parent-link');
-  var inp = document.getElementById('parent-link');
-  if (!btn || !inp) return;
-  btn.addEventListener('click', function(){
-    var t = inp.value;
-    function ok(){ var o = btn.textContent; btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = o; }, 1600); }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(t).then(ok).catch(function(){ inp.select(); document.execCommand('copy'); ok(); });
-    } else { inp.select(); document.execCommand('copy'); ok(); }
-  });
+  function bindCopy(btnId, inputId){
+    var btn = document.getElementById(btnId);
+    var inp = document.getElementById(inputId);
+    if (!btn || !inp) return;
+    btn.addEventListener('click', function(){
+      var t = inp.value;
+      function ok(){ var o = btn.textContent; btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = o; }, 1600); }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(t).then(ok).catch(function(){ inp.select(); document.execCommand('copy'); ok(); });
+      } else { inp.select(); document.execCommand('copy'); ok(); }
+    });
+  }
+  bindCopy('copy-parent-link', 'parent-link');
+  bindCopy('copy-website-list', 'website-list-link');
   document.querySelectorAll('.drop').forEach(function(d){
     d.addEventListener('toggle', function(){
       if (!d.open) return;

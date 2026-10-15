@@ -15,7 +15,7 @@ $script = basename($_SERVER['PHP_SELF'] ?? '');
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/app.css?v=parent13">
+  <link rel="stylesheet" href="assets/css/app.css?v=parent14">
 </head>
 <body>
 <?php if ($loggedIn): ?>
@@ -36,6 +36,16 @@ $script = basename($_SERVER['PHP_SELF'] ?? '');
     <a href="change-password.php">Password</a>
     <a class="logout" href="logout.php">Logout</a>
   </nav>
+</header>
+<?php elseif (!empty($publicHeader)): ?>
+<header class="topbar">
+  <a class="brand" href="open.php">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-text">
+      <strong>Tournaments</strong>
+      <small><?= bm_h(BM_ORG_LINE) ?></small>
+    </span>
+  </a>
 </header>
 <?php endif; ?>
 <main class="wrap <?= !empty($wrapClass) ? bm_h($wrapClass) : '' ?>">

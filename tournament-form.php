@@ -18,6 +18,9 @@ if ($id > 0) {
 
 $post = $_POST;
 $isPaidPost = isset($post['is_paid']) ? ((string)$post['is_paid'] === '1') : ($row ? bm_tournament_is_paid($row) : false);
+$showWebPost = isset($post['show_on_website'])
+    ? ((string)$post['show_on_website'] === '1')
+    : ($row ? bm_tournament_show_on_website($row) : false);
 $ageGroupsText = '';
 if ($id > 0) {
     $ageGroupsText = implode("\n", bm_tournament_age_group_labels($pdo, $id));
@@ -34,6 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $to = bm_parse_date_input((string)($post['date_to'] ?? ''));
         $notes = trim((string)($post['notes'] ?? ''));
         $isPaid = ((string)($post['is_paid'] ?? '0') === '1') ? 1 : 0;
+        $showWeb = ((string)($post['show_on_website'] ?? '0') === '1') ? 1 : 0;
         $feeSingle = max(0, (int)($post['fee_single'] ?? 0));
         $feeDouble = max(0, (int)($post['fee_double'] ?? 0));
         $feeMix = max(0, (int)($post['fee_mix'] ?? 0));
@@ -68,14 +72,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($id > 0) {
-            $pdo->prepare("UPDATE tournaments SET name=?, held_at=?, date_from=?, date_to=?, notes=?, is_paid=?, fee_single=?, fee_double=?, fee_mix=?, upi_id=?, qr_file=?, bank_account=?, bank_ifsc=?, bank_name=?, updated_at=datetime('now','localtime') WHERE id=?")
-                ->execute([$name, $heldAt, $from, $to, $notes !== '' ? $notes : null, $isPaid, $feeSingle, $feeDouble, $feeMix, $upi !== '' ? $upi : null, $qrKeep, $bankAccount !== '' ? $bankAccount : null, $bankIfsc !== '' ? $bankIfsc : null, $bankName !== '' ? $bankName : null, $id]);
+            $pdo->prepare("UPDATE tournaments SET name=?, held_at=?, date_from=?, date_to=?, notes=?, is_paid=?, fee_single=?, fee_double=?, fee_mix=?, upi_id=?, qr_file=?, bank_account=?, bank_ifsc=?, bank_name=?, show_on_website=?, updated_at=datetime('now','localtime') WHERE id=?")
+                ->execute([$name, $heldAt, $from, $to, $notes !== '' ? $notes : null, $isPaid, $feeSingle, $feeDouble, $feeMix, $upi !== '' ? $upi : null, $qrKeep, $bankAccount !== '' ? $bankAccount : null, $bankIfsc !== '' ? $bankIfsc : null, $bankName !== '' ? $bankName : null, $showWeb, $id]);
             bm_ensure_tournament_age_groups($pdo, $id, $groups);
             bm_flash('success', 'Tournament updated.');
             bm_redirect('tournament.php?id=' . $id);
         } else {
-            $pdo->prepare('INSERT INTO tournaments (name, held_at, date_from, date_to, notes, is_paid, fee_single, fee_double, fee_mix, upi_id, qr_file, bank_account, bank_ifsc, bank_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-                ->execute([$name, $heldAt, $from, $to, $notes !== '' ? $notes : null, $isPaid, $feeSingle, $feeDouble, $feeMix, $upi !== '' ? $upi : null, $qrKeep, $bankAccount !== '' ? $bankAccount : null, $bankIfsc !== '' ? $bankIfsc : null, $bankName !== '' ? $bankName : null]);
+            $pdo->prepare('INSERT INTO tournaments (name, held_at, date_from, date_to, notes, is_paid, fee_single, fee_double, fee_mix, upi_id, qr_file, bank_account, bank_ifsc, bank_name, show_on_website) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+                ->execute([$name, $heldAt, $from, $to, $notes !== '' ? $notes : null, $isPaid, $feeSingle, $feeDouble, $feeMix, $upi !== '' ? $upi : null, $qrKeep, $bankAccount !== '' ? $bankAccount : null, $bankIfsc !== '' ? $bankIfsc : null, $bankName !== '' ? $bankName : null, $showWeb]);
             $newId = (int)$pdo->lastInsertId();
             bm_ensure_tournament_age_groups($pdo, $newId, $groups);
             bm_flash('success', 'Tournament created. Parents will only see the age categories you added.');
@@ -84,6 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (Throwable $e) {
         bm_flash('error', $e->getMessage());
         $isPaidPost = ((string)($post['is_paid'] ?? '0') === '1');
+        $showWebPost = ((string)($post['show_on_website'] ?? '0') === '1');
     }
 }
 
@@ -118,6 +123,11 @@ require __DIR__ . '/includes/header.php';
         <input type="text" name="date_to" required maxlength="10" placeholder="dd-mm-yyyy" value="<?= bm_h($toDisplay) ?>">
       </label>
     </div>
+    <fieldset class="letter-fields">
+      <legend>Show on website list</legend>
+      <label class="check-inline"><input type="radio" name="show_on_website" value="1" <?= $showWebPost ? 'checked' : '' ?>> Show — parents see it on the Tournament page, year-wise</label>
+      <label class="check-inline"><input type="radio" name="show_on_website" value="0" <?= !$showWebPost ? 'checked' : '' ?>> Hide — private / non-PBA, send only this tournament’s link</label>
+    </fieldset>
     <fieldset class="letter-fields">
       <legend>Entry fee</legend>
       <label class="check-inline"><input type="radio" name="is_paid" value="0" <?= !$isPaidPost ? 'checked' : '' ?>> Free — parents see no fee</label>

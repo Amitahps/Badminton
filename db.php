@@ -143,6 +143,7 @@ function bm_init_schema(PDO $pdo): void
             bank_account TEXT,
             bank_ifsc TEXT,
             bank_name TEXT,
+            show_on_website INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
@@ -382,6 +383,9 @@ function bm_migrate_schema(PDO $pdo): void
         }
         if (!bm_column_exists($pdo, 'tournaments', 'bank_name')) {
             $pdo->exec('ALTER TABLE tournaments ADD COLUMN bank_name TEXT');
+        }
+        if (!bm_column_exists($pdo, 'tournaments', 'show_on_website')) {
+            $pdo->exec('ALTER TABLE tournaments ADD COLUMN show_on_website INTEGER NOT NULL DEFAULT 0');
         }
     }
 

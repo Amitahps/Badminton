@@ -32,10 +32,9 @@ function bm_tournament_by_public_token(PDO $pdo, string $token): ?array
     return $row ?: null;
 }
 
-function bm_join_url(string $token): string
+function bm_app_abs_url(string $path): string
 {
-    $token = trim($token);
-    $path = 'join.php?t=' . rawurlencode($token);
+    $path = ltrim($path, '/');
     $host = (string)($_SERVER['HTTP_HOST'] ?? '');
     if ($host === '') {
         return $path;
@@ -48,6 +47,51 @@ function bm_join_url(string $token): string
         $dir = '';
     }
     return ($https ? 'https://' : 'http://') . $host . $dir . '/' . $path;
+}
+
+function bm_join_url(string $token): string
+{
+    return bm_app_abs_url('join.php?t=' . rawurlencode(trim($token)));
+}
+
+function bm_public_list_url(?int $year = null): string
+{
+    $path = 'open.php';
+    if ($year !== null && $year > 1990) {
+        $path .= '?year=' . $year;
+    }
+    return bm_app_abs_url($path);
+}
+
+function bm_tournament_show_on_website(array $tournament): bool
+{
+    return (int)($tournament['show_on_website'] ?? 0) === 1;
+}
+
+function bm_tournament_year(array $tournament): string
+{
+    $from = trim((string)($tournament['date_from'] ?? ''));
+    if (preg_match('/^(\d{4})/', $from, $m)) {
+        return $m[1];
+    }
+    return 'Other';
+}
+
+/**
+ * @return array<string, list<array<string,mixed>>>
+ */
+function bm_public_tournaments_by_year(PDO $pdo): array
+{
+    $rows = $pdo->query("
+        SELECT * FROM tournaments
+        WHERE IFNULL(show_on_website, 0) = 1
+        ORDER BY date_from DESC, name COLLATE NOCASE, id DESC
+    ")->fetchAll();
+    $byYear = [];
+    foreach ($rows as $row) {
+        $byYear[bm_tournament_year($row)][] = $row;
+    }
+    return $byYear;
 }
 
 /**
@@ -1658,6 +1702,7 @@ function bm_parent_choice_cards(string $token, string $parentCode = '', string $
             'note' => 'Your payment / sender name, payment date / amount sent did not match the bank statement. Open your player details, correct the empty field and submit again.',
         ],
     ];
+    echo '<p class="hint no-print" style="margin-top:0;"><a href="open.php">All tournaments</a></p>';
     echo '<div class="choice-grid">';
     foreach ($items as $key => $item) {
         $cls = 'choice-card' . ($current === $key ? ' is-current' : '');
