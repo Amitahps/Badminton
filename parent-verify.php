@@ -116,15 +116,33 @@ if ($fmt === 'csv') {
     $out = fopen('php://output', 'w');
     fwrite($out, "\xEF\xBB\xBF");
     fputcsv($out, $head);
+    $expanded = [];
     foreach ($rows as $r) {
-        $labs = [];
-        foreach (explode(',', (string)$r['event_codes']) as $code) {
-            $code = trim($code);
-            if ($code !== '') {
-                $labs[] = bm_event_label($code);
-            }
+        $codes = bm_parent_row_event_codes($r);
+        foreach ($codes as $code) {
+            $copy = $r;
+            $copy['_excel_event'] = $code;
+            $copy['_excel_group'] = trim((string)($r['category_name'] ?? 'Age') . '|' . $code);
+            $expanded[] = $copy;
         }
-        fputcsv($out, [
+    }
+    usort($expanded, static function (array $a, array $b): int {
+        $c = strcasecmp((string)($a['category_name'] ?? ''), (string)($b['category_name'] ?? ''));
+        if ($c !== 0) {
+            return $c;
+        }
+        $e = bm_event_sort_index((string)($a['_excel_event'] ?? '')) <=> bm_event_sort_index((string)($b['_excel_event'] ?? ''));
+        if ($e !== 0) {
+            return $e;
+        }
+        return strcasecmp((string)($a['full_name'] ?? ''), (string)($b['full_name'] ?? ''));
+    });
+    bm_csv_write_with_group_gaps($out, $expanded, static function (array $r): array {
+        $eventCode = (string)($r['_excel_event'] ?? '');
+        $eventLabel = $eventCode !== '' ? bm_event_label($eventCode) : '';
+        $isDouble = in_array($eventCode, ['double_men', 'double_girls', ''], true);
+        $isMix = in_array($eventCode, ['mix_double', ''], true);
+        return [
             $r['tournament_name'],
             $r['category_name'],
             $r['full_name'],
@@ -134,20 +152,20 @@ if ($fmt === 'csv') {
             $r['player_father'] ?: $r['father_name'],
             $r['player_mobile'] ?: $r['contact_mobile'],
             $r['district'],
-            implode(', ', $labs),
+            $eventLabel,
             $r['payment_amount'],
             $r['payment_status'],
             $r['payment_utr'],
-            $r['d_name'],
-            $r['d_father'],
-            $r['d_mobile'],
-            $r['d_district'],
-            $r['m_name'],
-            $r['m_father'],
-            $r['m_mobile'],
-            $r['m_district'],
-        ]);
-    }
+            $isDouble ? $r['d_name'] : '',
+            $isDouble ? $r['d_father'] : '',
+            $isDouble ? $r['d_mobile'] : '',
+            $isDouble ? $r['d_district'] : '',
+            $isMix ? $r['m_name'] : '',
+            $isMix ? $r['m_father'] : '',
+            $isMix ? $r['m_mobile'] : '',
+            $isMix ? $r['m_district'] : '',
+        ];
+    });
     fclose($out);
     exit;
 }

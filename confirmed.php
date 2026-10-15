@@ -9,7 +9,7 @@ if ($tid <= 0) {
     $tid = bm_current_tournament_id();
 }
 $q = trim((string)($_GET['q'] ?? ''));
-$view = trim((string)($_GET['view'] ?? 'category'));
+$view = trim((string)($_GET['view'] ?? 'all'));
 if (!in_array($view, ['all', 'category'], true)) {
     $view = 'category';
 }

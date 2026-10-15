@@ -192,7 +192,12 @@ if ($fmt === 'csv') {
         }
     }
     fputcsv($out, $head);
+    $sectionI = 0;
     foreach ($grouped as $block) {
+        if ($sectionI > 0) {
+            fputcsv($out, []);
+        }
+        $sectionI++;
         foreach ($block['teams'] as $ti => $team) {
             foreach ($team['members'] as $p) {
                 $rowOut = [$block['heading'], $ti + 1, $p['full_name']];

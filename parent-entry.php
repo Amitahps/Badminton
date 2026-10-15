@@ -1464,6 +1464,82 @@ function bm_parent_output_declined_csv(array $tournament, array $rows, string $l
     bm_parent_output_browse_csv($tournament, $rows, $label, 'declined');
 }
 
+/** @return list<string> */
+function bm_parent_row_event_codes(array $row): array
+{
+    $codes = [];
+    foreach (explode(',', (string)($row['event_codes'] ?? '')) as $code) {
+        $code = trim($code);
+        if ($code !== '') {
+            $codes[] = $code;
+        }
+    }
+    return $codes !== [] ? $codes : [''];
+}
+
+function bm_event_sort_index(string $code): int
+{
+    $order = ['single' => 0, 'double_men' => 1, 'double_girls' => 2, 'mix_double' => 3];
+    return $order[$code] ?? 9;
+}
+
+/**
+ * One Excel row per age category + event, so U11 Boys then a gap then U11 Boys Doubles.
+ *
+ * @param list<array<string,mixed>> $rows
+ * @return list<array<string,mixed>>
+ */
+function bm_parent_expand_rows_for_excel(array $rows): array
+{
+    $out = [];
+    foreach ($rows as $row) {
+        foreach (bm_parent_row_event_codes($row) as $code) {
+            $copy = $row;
+            $copy['_excel_event'] = $code;
+            $copy['_excel_group'] = trim((string)($row['category_name'] ?? 'Age') . '|' . $code);
+            $out[] = $copy;
+        }
+    }
+    usort($out, static function (array $a, array $b): int {
+        $sa = (int)($a['sort_order'] ?? 0);
+        $sb = (int)($b['sort_order'] ?? 0);
+        if ($sa !== $sb) {
+            return $sa <=> $sb;
+        }
+        $ca = strcasecmp((string)($a['category_name'] ?? ''), (string)($b['category_name'] ?? ''));
+        if ($ca !== 0) {
+            return $ca;
+        }
+        $ea = bm_event_sort_index((string)($a['_excel_event'] ?? ''));
+        $eb = bm_event_sort_index((string)($b['_excel_event'] ?? ''));
+        if ($ea !== $eb) {
+            return $ea <=> $eb;
+        }
+        return strcasecmp((string)($a['full_name'] ?? ''), (string)($b['full_name'] ?? ''));
+    });
+    return $out;
+}
+
+/**
+ * @param resource $out
+ * @param list<array<string,mixed>> $rows
+ * @param callable(array<string,mixed>): list<mixed> $mapRow
+ */
+function bm_csv_write_with_group_gaps($out, array $rows, callable $mapRow, string $groupKey = '_excel_group'): void
+{
+    $prev = null;
+    $started = false;
+    foreach ($rows as $row) {
+        $key = (string)($row[$groupKey] ?? '');
+        if ($started && $key !== $prev) {
+            fputcsv($out, []);
+        }
+        fputcsv($out, $mapRow($row));
+        $prev = $key;
+        $started = true;
+    }
+}
+
 /**
  * @param list<array<string,mixed>> $rows
  * @param 'confirmed'|'declined' $mode
@@ -1488,7 +1564,10 @@ function bm_parent_output_browse_csv(array $tournament, array $rows, string $lab
         $head = array_merge($head, ['Payment', 'UTR', 'Doubles partner', 'Mix partner']);
     }
     fputcsv($out, $head);
-    foreach ($rows as $r) {
+    $expanded = bm_parent_expand_rows_for_excel($rows);
+    bm_csv_write_with_group_gaps($out, $expanded, static function (array $r) use ($isDeclined): array {
+        $eventCode = (string)($r['_excel_event'] ?? '');
+        $eventLabel = $eventCode !== '' ? bm_event_label($eventCode) : bm_parent_row_event_labels($r);
         $base = [
             (string)($r['category_name'] ?? ''),
             (string)($r['full_name'] ?? ''),
@@ -1498,28 +1577,29 @@ function bm_parent_output_browse_csv(array $tournament, array $rows, string $lab
             (string)(($r['player_father'] ?? '') !== '' ? $r['player_father'] : ($r['father_name'] ?? '')),
             (string)(($r['mobile'] ?? '') !== '' ? $r['mobile'] : ($r['contact_mobile'] ?? '')),
             (string)($r['address'] ?? ''),
-            bm_parent_row_event_labels($r),
+            $eventLabel,
         ];
+        $dName = in_array($eventCode, ['double_men', 'double_girls', ''], true) ? (string)($r['d_full_name'] ?? '') : '';
+        $mName = in_array($eventCode, ['mix_double', ''], true) ? (string)($r['m_full_name'] ?? '') : '';
         if ($isDeclined) {
             $payDate = trim((string)($r['payment_date'] ?? ''));
-            fputcsv($out, array_merge($base, [
+            return array_merge($base, [
                 bm_decline_reason_label((string)($r['decline_reason'] ?? '')),
                 $payDate !== '' ? $payDate : '',
                 (string)($r['payment_utr'] ?? ''),
                 (string)($r['payment_sender'] ?? ''),
                 (string)((int)($r['payment_amount'] ?? 0)),
-                (string)($r['d_full_name'] ?? ''),
-                (string)($r['m_full_name'] ?? ''),
-            ]));
-        } else {
-            fputcsv($out, array_merge($base, [
-                bm_parent_payment_label((string)($r['payment_status'] ?? ''), (int)($r['payment_amount'] ?? 0)),
-                (string)($r['payment_utr'] ?? ''),
-                (string)($r['d_full_name'] ?? ''),
-                (string)($r['m_full_name'] ?? ''),
-            ]));
+                $dName,
+                $mName,
+            ]);
         }
-    }
+        return array_merge($base, [
+            bm_parent_payment_label((string)($r['payment_status'] ?? ''), (int)($r['payment_amount'] ?? 0)),
+            (string)($r['payment_utr'] ?? ''),
+            $dName,
+            $mName,
+        ]);
+    });
     fclose($out);
     exit;
 }
@@ -1537,12 +1617,12 @@ function bm_parent_choice_cards(string $token, string $parentCode = '', string $
         'confirmed' => [
             'href' => 'join-confirmed.php?t=' . $t,
             'title' => 'Confirmed Entries',
-            'note' => 'Players the organiser has accepted. Includes fee pending. Download a receipt only after online payment is confirmed.',
+            'note' => 'List of entries accepted by officials. Download a receipt only after online payment is confirmed. Copy of receipt is mandatory on the day of tournament.',
         ],
         'declined' => [
             'href' => 'join-declined.php?t=' . $t . $p,
             'title' => 'Declined Entries',
-            'note' => 'Your payment did not match the bank statement. Open your player, correct the empty field and submit again.',
+            'note' => 'Your payment / sender name, payment date / amount sent did not match the bank statement. Open your player details, correct the empty field and submit again.',
         ],
     ];
     echo '<div class="choice-grid">';

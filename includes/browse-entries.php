@@ -93,17 +93,17 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
     <p class="lede"><?php if ($isReceipts): ?>
       Receipts for players whose online payment the organiser has confirmed. Entries still pending cash are not listed.
     <?php elseif ($isDeclined): ?>
-      Declined entries. These payments did not match the bank statement. Open a player to accept after a correction, or wait for the parent to resubmit.
+      Your payment / sender name, payment date / amount sent did not match the bank statement. Open your player details, correct the empty field and submit again.
     <?php else: ?>
-      Confirmed entries. Players accepted by the organiser are listed here, including those with fee pending.
+      List of entries accepted by officials. Download a receipt only after online payment is confirmed. Copy of receipt is mandatory on the day of tournament.
     <?php endif; ?></p>
   </div>
   <?php if (!$isReceipts && $total > 0): ?>
   <div class="page-actions no-print">
-    <a class="btn <?= $view === 'all' ? 'btn-primary' : '' ?>" href="<?= bm_h($viewAllUrl) ?>">All entries</a>
+    <a class="btn <?= $view === 'all' ? 'btn-primary' : '' ?>" href="<?= bm_h($viewAllUrl) ?>">Show all</a>
     <a class="btn <?= $view === 'category' ? 'btn-primary' : '' ?>" href="<?= bm_h($viewCatUrl) ?>">Category wise</a>
-    <button type="button" class="btn" data-print-all>Print / PDF</button>
-    <a class="btn" href="<?= bm_h($excelAll) ?>">Excel</a>
+    <button type="button" class="btn btn-primary" data-print-all>Print / PDF all</button>
+    <a class="btn btn-primary" href="<?= bm_h($excelAll) ?>">Excel all</a>
   </div>
   <?php endif; ?>
 </section>

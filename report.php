@@ -98,10 +98,16 @@ if (isset($_GET['format']) && $_GET['format'] === 'csv') {
     header('Content-Disposition: attachment; filename="team_report.csv"');
     $out = fopen('php://output', 'w');
     fputcsv($out, ['Age group', 'Boys Singles', 'Girls Singles', 'Boys Doubles', 'Girls Doubles', 'Mix Doubles', 'Total teams']);
+    $ageI = 0;
     foreach ($byGroup as $row) {
+        if ($ageI > 0) {
+            fputcsv($out, []);
+        }
+        $ageI++;
         $sum = $row['boys_single'] + $row['girls_single'] + $row['boys_double'] + $row['girls_double'] + $row['mix'];
         fputcsv($out, [$row['label'], $row['boys_single'], $row['girls_single'], $row['boys_double'], $row['girls_double'], $row['mix'], $sum]);
     }
+    fputcsv($out, []);
     fputcsv($out, ['Total', $totals['boys_single'], $totals['girls_single'], $totals['boys_double'], $totals['girls_double'], $totals['mix'], $grand]);
     fclose($out);
     exit;
