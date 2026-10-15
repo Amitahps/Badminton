@@ -1705,6 +1705,7 @@ function bm_parent_tournament_stats(array $rows): array
         'mix' => $z,
         'confirmed' => $z,
         'pending' => $z,
+        'unpaid' => $z,
     ];
     foreach ($rows as $r) {
         $st = (string)($r['payment_status'] ?? '');
@@ -1717,9 +1718,12 @@ function bm_parent_tournament_stats(array $rows): array
         if (in_array($st, ['paid', 'na'], true)) {
             $stats['confirmed']['count']++;
             $stats['confirmed']['amount'] += $amt;
-        } elseif ($st === 'pending') {
+        } elseif ($st === 'review') {
             $stats['pending']['count']++;
             $stats['pending']['amount'] += $amt;
+        } elseif ($st === 'pending') {
+            $stats['unpaid']['count']++;
+            $stats['unpaid']['amount'] += $amt;
         }
         $buckets = [];
         foreach (bm_parent_row_event_codes($r) as $code) {
@@ -1764,8 +1768,13 @@ function bm_parent_render_fee_summary(array $stats): void
     echo '<p class="muted" style="margin:0.45rem 0 0;">Accepted with online payment, or free.</p>';
     echo '</div>';
     echo '<div class="fee-card">';
-    echo '<h3>Pending / not paid online</h3>';
+    echo '<h3>Pending entries</h3>';
     echo '<div class="nums">' . (int)$stats['pending']['count'] . ' <small>' . bm_h(bm_rupees((int)$stats['pending']['amount'])) . '</small></div>';
+    echo '<p class="muted" style="margin:0.45rem 0 0;">Still waiting for a bank-statement check.</p>';
+    echo '</div>';
+    echo '<div class="fee-card">';
+    echo '<h3>Not paid online</h3>';
+    echo '<div class="nums">' . (int)$stats['unpaid']['count'] . ' <small>' . bm_h(bm_rupees((int)$stats['unpaid']['amount'])) . '</small></div>';
     echo '<p class="muted" style="margin:0.45rem 0 0;">Accepted without online payment. Collect on the day.</p>';
     echo '</div></section>';
 }
