@@ -10,6 +10,7 @@ declare(strict_types=1);
 /** @var bool $openAll */
 /** @var string $view */
 /** @var string $receiptsUrl */
+/** @var bool $allowExport */
 
 $browseMode = $browseMode ?? 'confirmed';
 $grouped = $grouped ?? [];
@@ -22,6 +23,7 @@ if (!in_array($view, ['all', 'category'], true)) {
     $view = 'category';
 }
 $receiptsUrl = $receiptsUrl ?? '';
+$allowExport = $allowExport ?? true;
 $openAll = !empty($openAll) || trim($q) !== '' || $view === 'all';
 $total = 0;
 $flat = [];
@@ -111,8 +113,10 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
   <div class="page-actions no-print">
     <a class="btn <?= $view === 'all' ? 'btn-primary' : '' ?>" href="<?= bm_h($viewAllUrl) ?>">Show all</a>
     <a class="btn <?= $view === 'category' ? 'btn-primary' : '' ?>" href="<?= bm_h($viewCatUrl) ?>">Category wise</a>
+    <?php if ($allowExport): ?>
     <button type="button" class="btn btn-primary" data-print-all>Print / PDF all</button>
     <a class="btn btn-primary" href="<?= bm_h($excelAll) ?>">Excel all</a>
+    <?php endif; ?>
   </div>
   <?php endif; ?>
 </section>
@@ -138,7 +142,7 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
       <a class="btn" href="<?= bm_h($filterAction . ($filterHidden ? ('?' . http_build_query($filterHidden)) : '')) ?>">Clear</a>
     <?php endif; ?>
   </form>
-  <?php if (!$isReceipts && $catChoices): ?>
+  <?php if ($allowExport && !$isReceipts && $catChoices): ?>
   <form class="filters" id="cat-export" onsubmit="return false;">
     <select name="category_id" id="cat-export-id">
       <option value="">One category…</option>
@@ -204,7 +208,7 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
   <details class="cat-drop" data-cat-id="<?= $cid ?>"<?= $openAll ? ' open' : '' ?>>
     <summary>
       <?= bm_h($catName) ?> <span class="muted">(<?= count($list) ?>)</span>
-      <?php if (!$isReceipts && $cid > 0): ?>
+      <?php if ($allowExport && !$isReceipts && $cid > 0): ?>
       <span class="cat-export no-print">
         <button type="button" class="btn btn-sm" data-print-cat="<?= $cid ?>">Print / PDF</button>
         <a class="btn btn-sm" href="<?= bm_h($filterAction . '?' . http_build_query(array_merge($exportBase, ['format' => 'csv', 'category_id' => (string)$cid]))) ?>">Excel</a>
@@ -246,7 +250,7 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
   </details>
   <?php endforeach; ?>
 <?php endif; ?>
-<?php if (!$isReceipts && $total > 0): ?>
+<?php if ($allowExport && !$isReceipts && $total > 0): ?>
 <script>
 (function(){
   var excelBase = <?= json_encode($filterAction . '?' . http_build_query($exportBase), JSON_UNESCAPED_UNICODE) ?>;

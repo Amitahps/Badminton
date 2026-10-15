@@ -76,7 +76,7 @@ require __DIR__ . '/includes/header.php';
 <?php bm_parent_choice_cards($token, $parentCode, $showForm ? 'new' : ''); ?>
 <?php if (!$showForm): ?>
 <section class="panel">
-  <p class="lede" style="max-width:none;">Choose <strong>New Entry</strong> to add a player, <strong>Confirmed Entries</strong> for names accepted by officials, or <strong>Declined Entries</strong> if payment, sender name, date or amount did not match and needs a correction.</p>
+  <p class="lede" style="max-width:none;"><?php if ($isPaid): ?>Choose <strong>New Entry</strong> to add a player, <strong>Confirmed Entries</strong> for names accepted by officials, or <strong>Declined Entries</strong> if payment, sender name, date or amount did not match and needs a correction.<?php else: ?>Choose <strong>New Entry</strong> to add a player, or <strong>Confirmed Entries</strong> for names accepted by officials.<?php endif; ?></p>
 </section>
 <?php else: ?>
 <section class="page-head" style="margin-top:0.4rem;">

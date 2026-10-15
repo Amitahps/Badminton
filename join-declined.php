@@ -15,6 +15,10 @@ if (!$tournament) {
     exit;
 }
 
+if (!bm_tournament_is_paid($tournament)) {
+    bm_redirect('join.php?t=' . rawurlencode($token));
+}
+
 if ($code === '') {
     $code = bm_own_parent_code($token);
 }

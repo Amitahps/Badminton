@@ -100,7 +100,7 @@ if (isset($_POST['save_parent_edit'])) {
         $pdo->prepare('UPDATE parent_submissions SET father_name=?, contact_mobile=? WHERE id=?')
             ->execute([$father, $mobile, (int)$sub['id']]);
         bm_flash('success', $status === 'declined' ? 'Corrected details sent. The organiser will check the bank statement again.' : 'Entry updated.');
-        bm_redirect($status === 'declined'
+        bm_redirect(($status === 'declined' && bm_tournament_is_paid($tournament))
             ? 'join-declined.php?t=' . rawurlencode($token) . '&p=' . rawurlencode($code)
             : $mine);
     } catch (Throwable $e) {

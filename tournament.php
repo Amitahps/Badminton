@@ -55,60 +55,6 @@ if (isset($_POST['decline_reason']) && isset($_POST['decline_id'])) {
     }
     bm_redirect('tournament.php?id=' . $id);
 }
-if (isset($_POST['clear_bank_auto'])) {
-    unset($_SESSION['bm_bank_auto'][$id]);
-    bm_flash('success', 'Auto-check result cleared. Manual Accept / Decline still works.');
-    bm_redirect('tournament.php?id=' . $id);
-}
-if (isset($_POST['bank_auto_check'])) {
-    try {
-        $bankRows = bm_bank_rows_from_upload($_FILES['bank_file'] ?? []);
-        $st = $pdo->prepare("
-            SELECT s.*, p.full_name
-            FROM parent_submissions s
-            JOIN players p ON p.id = s.primary_player_id
-            WHERE s.tournament_id = ? AND s.payment_status = 'review'
-        ");
-        $st->execute([$id]);
-        $result = bm_bank_auto_match($st->fetchAll(), $bankRows);
-        $matchedIds = [];
-        $matchedNames = [];
-        foreach ($result['matched'] as $row) {
-            $matchedIds[] = (int)$row['id'];
-            $matchedNames[] = (string)($row['full_name'] ?? '');
-        }
-        $_SESSION['bm_bank_auto'][$id] = [
-            'file' => (string)($_FILES['bank_file']['name'] ?? 'statement'),
-            'bank_count' => count($bankRows),
-            'matched_ids' => $matchedIds,
-            'matched_names' => $matchedNames,
-        ];
-        $n = count($matchedIds);
-        bm_flash(
-            'success',
-            $n > 0
-                ? ($n . ' exact match(es) — UTR, amount and date. You may Accept all matched, or still do one by one.')
-                : 'No exact UTR + amount + date matches. Check remaining entries by hand.'
-        );
-    } catch (Throwable $e) {
-        bm_flash('error', $e->getMessage());
-    }
-    bm_redirect('tournament.php?id=' . $id);
-}
-if (isset($_POST['accept_bank_matched'])) {
-    $ids = $_SESSION['bm_bank_auto'][$id]['matched_ids'] ?? [];
-    $n = 0;
-    foreach ($ids as $sid) {
-        $sub = bm_parent_load_by_id($pdo, (int)$sid, $id);
-        if ($sub && (string)($sub['payment_status'] ?? '') === 'review') {
-            bm_parent_confirm_paid($pdo, $sub);
-            $n++;
-        }
-    }
-    unset($_SESSION['bm_bank_auto'][$id]);
-    bm_flash('success', $n . ' matched ' . ($n === 1 ? 'entry' : 'entries') . ' accepted.');
-    bm_redirect('tournament.php?id=' . $id);
-}
 if (isset($_POST['show_on_website_set'])) {
     $show = ((string)$_POST['show_on_website_set'] === '1') ? 1 : 0;
     $pdo->prepare('UPDATE tournaments SET show_on_website=?, updated_at=datetime(\'now\',\'localtime\') WHERE id=?')
@@ -256,10 +202,7 @@ foreach ($parentRows as $ps) {
     }
 }
 
-$bankAuto = $_SESSION['bm_bank_auto'][$id] ?? null;
-$bankMatchIds = array_map('intval', is_array($bankAuto['matched_ids'] ?? null) ? $bankAuto['matched_ids'] : []);
-
-$renderReviewRow = static function (array $ps, int $n) use ($bankMatchIds): void {
+$renderReviewRow = static function (array $ps, int $n): void {
     $st = (string)($ps['payment_status'] ?? '');
     $pd = trim((string)($ps['payment_date'] ?? ''));
     $labs = [];
@@ -287,11 +230,7 @@ $renderReviewRow = static function (array $ps, int $n) use ($bankMatchIds): void
     echo '</div>';
     echo '<div><span class="review-k">Age</span>' . bm_h((string)$ps['category_name']) . '</div>';
     echo '<div><span class="review-k">Event</span>' . bm_h(implode(', ', $labs)) . '</div>';
-    echo '<div><span class="review-k">Status</span><span class="status-pill">' . bm_h(bm_parent_payment_label($st, $amt)) . '</span>';
-    if (in_array((int)$ps['id'], $bankMatchIds, true)) {
-        echo ' <span class="status-pill match-pill">UTR + amount + date match</span>';
-    }
-    echo '</div>';
+    echo '<div><span class="review-k">Status</span><span class="status-pill">' . bm_h(bm_parent_payment_label($st, $amt)) . '</span></div>';
     echo '</div><div class="review-actions">';
     echo '<form method="post" class="inline"><button type="submit" name="accept_paid" value="' . (int)$ps['id'] . '" class="btn btn-sm btn-primary" ' . bm_parent_confirm_attr('accept_paid') . '>Accept</button></form>';
     echo '<details class="drop"><summary class="btn btn-sm btn-danger">Decline</summary><div class="drop-menu">';
@@ -355,29 +294,6 @@ $feeStats = bm_parent_tournament_stats($parentRows);
   <div class="share-link">
     <input id="parent-link" type="text" readonly value="<?= bm_h($parentLink) ?>">
     <button type="button" class="btn btn-primary" id="copy-parent-link">Copy link</button>
-  </div>
-  <div class="bank-auto" style="margin-top:1rem;">
-    <h3 style="margin:0 0 0.35rem;font-size:1.02rem;">Auto-check (optional)</h3>
-    <p class="hint" style="margin-top:0;">Upload bank Excel or CSV. A match is only when <strong>UTR</strong>, <strong>amount</strong> and <strong>date</strong> are the same. UTR <strong>123456</strong> matches <strong>123456</strong> only — nothing before, after or between (not 123 456, 1234567, 012345, or 123456, 123456). You can still Accept or Decline one by one.</p>
-    <form method="post" enctype="multipart/form-data" class="filters" style="margin:0.5rem 0 0;">
-      <input type="file" name="bank_file" accept=".xlsx,.csv,.txt" required>
-      <button type="submit" name="bank_auto_check" value="1" class="btn btn-primary">Auto-check</button>
-    </form>
-    <?php if (is_array($bankAuto)): ?>
-      <p class="hint" style="margin-top:0.65rem;">
-        File <?= bm_h((string)($bankAuto['file'] ?? '')) ?> · <?= (int)($bankAuto['bank_count'] ?? 0) ?> bank line(s) ·
-        <strong><?= count($bankMatchIds) ?> exact match(es)</strong>
-        <?php if ($bankAuto['matched_names'] ?? []): ?>
-          — <?= bm_h(implode(', ', array_slice((array)$bankAuto['matched_names'], 0, 8))) ?><?= count((array)$bankAuto['matched_names']) > 8 ? '…' : '' ?>
-        <?php endif; ?>
-      </p>
-      <form method="post" class="form-actions" style="margin-top:0.4rem;">
-        <?php if ($bankMatchIds): ?>
-        <button type="submit" name="accept_bank_matched" value="1" class="btn btn-primary" <?= bm_parent_confirm_attr('accept_bank_matched') ?>>Accept all matched</button>
-        <?php endif; ?>
-        <button type="submit" name="clear_bank_auto" value="1" class="btn">Clear auto-check</button>
-      </form>
-    <?php endif; ?>
   </div>
   <?php if ($reviewByDate): ?>
   <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Check date-wise against the bank statement. Decline opens four mismatch reasons. Accept and Decline ask you to confirm first.</p>
