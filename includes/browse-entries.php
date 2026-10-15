@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /** @var array<string,mixed> $tournament */
-/** @var 'confirmed'|'receipts' $browseMode */
+/** @var 'confirmed'|'receipts'|'declined' $browseMode */
 /** @var array<string, list<array<string,mixed>>> $grouped */
 /** @var string $q */
 /** @var string $filterAction */
@@ -32,6 +32,7 @@ foreach ($grouped as $list) {
     }
 }
 $isReceipts = $browseMode === 'receipts';
+$isDeclined = $browseMode === 'declined';
 $exportBase = $filterHidden;
 if ($q !== '') {
     $exportBase['q'] = $q;
@@ -47,7 +48,9 @@ foreach ($grouped as $catName => $list) {
     }
 }
 
-$renderConfirmedCells = static function (array $row, bool $isReceipts, string $token): void {
+$renderConfirmedCells = static function (array $row, string $mode, string $token): void {
+    $isReceipts = $mode === 'receipts';
+    $isDeclined = $mode === 'declined';
     echo '<td><strong>' . bm_h((string)($row['full_name'] ?? '')) . '</strong>';
     if (!$isReceipts && trim((string)($row['d_full_name'] ?? '')) !== '') {
         echo '<div class="muted">Doubles: ' . bm_h((string)$row['d_full_name']) . '</div>';
@@ -69,6 +72,11 @@ $renderConfirmedCells = static function (array $row, bool $isReceipts, string $t
     echo '<td>' . bm_h((string)(($row['mobile'] ?? '') !== '' ? $row['mobile'] : ($row['contact_mobile'] ?? ''))) . '</td>';
     echo '<td>' . bm_h((string)($row['address'] ?? '')) . '</td>';
     echo '<td>' . bm_h(bm_parent_row_event_labels($row)) . '</td>';
+    if ($isDeclined) {
+        echo '<td>' . bm_h(bm_decline_reason_label((string)($row['decline_reason'] ?? ''))) . '</td>';
+        echo '<td class="right no-print"><a class="btn btn-sm" href="parent-edit.php?id=' . (int)($row['id'] ?? 0) . '">Open</a></td>';
+        return;
+    }
     echo '<td>' . bm_h(bm_parent_payment_label((string)($row['payment_status'] ?? ''), (int)($row['payment_amount'] ?? 0))) . '</td>';
     echo '<td class="right no-print">';
     if ((string)($row['payment_status'] ?? '') === 'paid') {
@@ -84,6 +92,8 @@ $renderConfirmedCells = static function (array $row, bool $isReceipts, string $t
     <h1><?= bm_h((string)($tournament['name'] ?? 'Tournament')) ?></h1>
     <p class="lede"><?php if ($isReceipts): ?>
       Receipts for players whose online payment the organiser has confirmed. Entries still pending cash are not listed.
+    <?php elseif ($isDeclined): ?>
+      Declined entries. These payments did not match the bank statement. Open a player to accept after a correction, or wait for the parent to resubmit.
     <?php else: ?>
       Confirmed entries. Players accepted by the organiser are listed here, including those with fee pending.
     <?php endif; ?></p>
@@ -97,7 +107,15 @@ $renderConfirmedCells = static function (array $row, bool $isReceipts, string $t
   </div>
   <?php endif; ?>
 </section>
-<p class="print-only print-title"><?= bm_h((string)($tournament['name'] ?? 'Tournament')) ?><br><?= $isReceipts ? 'Receipts' : 'Confirmed entries' ?><?php if ($q !== ''): ?> · <?= bm_h($q) ?><?php endif; ?></p>
+<p class="print-only print-title"><?= bm_h((string)($tournament['name'] ?? 'Tournament')) ?><br><?php
+    if ($isReceipts) {
+        echo 'Receipts';
+    } elseif ($isDeclined) {
+        echo 'Declined entries';
+    } else {
+        echo 'Confirmed entries';
+    }
+?><?php if ($q !== ''): ?> · <?= bm_h($q) ?><?php endif; ?></p>
 <section class="panel no-print">
   <form method="get" action="<?= bm_h($filterAction) ?>" class="filters">
     <?php foreach ($filterHidden as $k => $v): ?>
@@ -128,6 +146,8 @@ $renderConfirmedCells = static function (array $row, bool $isReceipts, string $t
     No player matching “<?= bm_h($q) ?>”.
   <?php elseif ($isReceipts): ?>
     No confirmed online payments yet.
+  <?php elseif ($isDeclined): ?>
+    No declined entries yet.
   <?php else: ?>
     No confirmed entries yet.
   <?php endif; ?></p>
@@ -146,7 +166,7 @@ $renderConfirmedCells = static function (array $row, bool $isReceipts, string $t
         <th>Contact</th>
         <th>District</th>
         <th>Events</th>
-        <th>Payment</th>
+        <th><?= $isDeclined ? 'Mismatch' : 'Payment' ?></th>
         <th class="no-print"></th>
       </tr>
     </thead>
@@ -154,7 +174,7 @@ $renderConfirmedCells = static function (array $row, bool $isReceipts, string $t
     <?php foreach ($flat as $row): ?>
       <tr data-cat-id="<?= (int)($row['category_id'] ?? 0) ?>">
         <td><?= bm_h((string)($row['category_name'] ?? '')) ?></td>
-        <?php $renderConfirmedCells($row, false, $token); ?>
+        <?php $renderConfirmedCells($row, $browseMode, $token); ?>
       </tr>
     <?php endforeach; ?>
     </tbody>
@@ -189,7 +209,7 @@ $renderConfirmedCells = static function (array $row, bool $isReceipts, string $t
             <th>Contact</th>
             <th>District</th>
             <th>Events</th>
-            <th>Payment</th>
+            <th><?= $isDeclined ? 'Mismatch' : 'Payment' ?></th>
             <th class="no-print"></th>
           <?php endif; ?>
         </tr>
@@ -197,7 +217,7 @@ $renderConfirmedCells = static function (array $row, bool $isReceipts, string $t
       <tbody>
       <?php foreach ($list as $row): ?>
         <tr data-cat-id="<?= $cid ?>">
-          <?php $renderConfirmedCells($row, $isReceipts, $token); ?>
+          <?php $renderConfirmedCells($row, $browseMode, $token); ?>
         </tr>
       <?php endforeach; ?>
       </tbody>

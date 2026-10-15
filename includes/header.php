@@ -15,7 +15,7 @@ $script = basename($_SERVER['PHP_SELF'] ?? '');
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/app.css?v=parent9">
+  <link rel="stylesheet" href="assets/css/app.css?v=parent10">
 </head>
 <body>
 <?php if ($loggedIn): ?>
@@ -34,6 +34,7 @@ $script = basename($_SERVER['PHP_SELF'] ?? '');
     <?php $navTid = bm_current_tournament_id(); ?>
     <a href="tournaments.php" class="<?= strpos($script, 'tournament') === 0 || $script === 'letter.php' || $script === 'letter-select.php' || strpos($script, 'parent-') === 0 ? 'active' : '' ?>">Tournaments</a>
     <a href="confirmed.php<?= $navTid > 0 ? '?id=' . $navTid : '' ?>" class="<?= $script === 'confirmed.php' ? 'active' : '' ?>">Confirmed</a>
+    <a href="declined.php<?= $navTid > 0 ? '?id=' . $navTid : '' ?>" class="<?= $script === 'declined.php' ? 'active' : '' ?>">Declined</a>
     <a href="parent-verify.php<?= $navTid > 0 ? '?tournament_id=' . $navTid : '' ?>" class="<?= $script === 'parent-verify.php' ? 'active' : '' ?>">Verify</a>
     <a href="report.php<?= $navTid > 0 ? '?tournament_id=' . $navTid : '' ?>" class="<?= $script === 'report.php' && !isset($_GET['saved']) ? 'active' : '' ?>">Report</a>
     <a href="report.php?saved=1<?= $navTid > 0 ? '&amp;tournament_id=' . $navTid . '&amp;st_tournament=' . $navTid : '' ?>#saved-teams" class="<?= $script === 'report.php' && isset($_GET['saved']) ? 'active' : '' ?>">Saved teams</a>

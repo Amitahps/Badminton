@@ -1344,7 +1344,7 @@ function bm_parent_confirm_messages(): array
 {
     return [
         'accept_paid' => 'Accept this entry? Date, UTR and sender name match the bank statement?',
-        'accept_pending' => 'Accept this entry with payment pending? The player will be on the list. Cash will be collected on the tournament day.',
+        'accept_pending' => 'Accept this entry without payment? The player will be on the list. Cash can be collected later on the tournament day.',
         'mark_cash' => 'Mark cash received and change this payment to Paid?',
         'date_mismatch' => 'Decline this entry because the date of payment does not match the bank statement?',
         'utr_mismatch' => 'Decline this entry because the reference / UTR does not match the bank statement?',
@@ -1371,7 +1371,7 @@ function bm_parent_list_for_browse(PDO $pdo, int $tournamentId, array $statuses,
     $in = implode(',', array_fill(0, count($statuses), '?'));
     $sql = "
         SELECT s.id, s.receipt_code, s.event_codes, s.payment_status, s.payment_amount,
-               s.payment_utr, s.payment_date, s.payment_sender, s.father_name, s.contact_mobile,
+               s.payment_utr, s.payment_date, s.payment_sender, s.decline_reason, s.father_name, s.contact_mobile,
                c.id AS category_id, c.name AS category_name, c.sort_order,
                p.full_name, p.gender, p.bai_id, p.pbi_id,
                p.father_name AS player_father, p.mobile, p.address,
@@ -1453,8 +1453,26 @@ function bm_parent_filter_by_category_id(array $rows, int $categoryId): array
  */
 function bm_parent_output_confirmed_csv(array $tournament, array $rows, string $label = 'all'): void
 {
+    bm_parent_output_browse_csv($tournament, $rows, $label, 'confirmed');
+}
+
+/**
+ * @param list<array<string,mixed>> $rows
+ */
+function bm_parent_output_declined_csv(array $tournament, array $rows, string $label = 'all'): void
+{
+    bm_parent_output_browse_csv($tournament, $rows, $label, 'declined');
+}
+
+/**
+ * @param list<array<string,mixed>> $rows
+ * @param 'confirmed'|'declined' $mode
+ */
+function bm_parent_output_browse_csv(array $tournament, array $rows, string $label, string $mode): void
+{
+    $isDeclined = $mode === 'declined';
     $safe = preg_replace('/[^A-Za-z0-9_-]+/', '_', $label) ?: 'all';
-    $file = 'confirmed_' . $safe . '.csv';
+    $file = ($isDeclined ? 'declined_' : 'confirmed_') . $safe . '.csv';
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $file . '"');
     $out = fopen('php://output', 'w');
@@ -1462,10 +1480,16 @@ function bm_parent_output_confirmed_csv(array $tournament, array $rows, string $
         return;
     }
     fwrite($out, "\xEF\xBB\xBF");
-    fputcsv($out, [(string)($tournament['name'] ?? 'Tournament'), 'Confirmed entries']);
-    fputcsv($out, ['Category', 'Player', 'Gender', 'BAI ID', 'PBI ID', 'Father', 'Contact', 'District', 'Events', 'Payment', 'UTR', 'Doubles partner', 'Mix partner']);
+    fputcsv($out, [(string)($tournament['name'] ?? 'Tournament'), $isDeclined ? 'Declined entries' : 'Confirmed entries']);
+    $head = ['Category', 'Player', 'Gender', 'BAI ID', 'PBI ID', 'Father', 'Contact', 'District', 'Events'];
+    if ($isDeclined) {
+        $head = array_merge($head, ['Mismatch', 'Date', 'UTR', 'Sender', 'Amount', 'Doubles partner', 'Mix partner']);
+    } else {
+        $head = array_merge($head, ['Payment', 'UTR', 'Doubles partner', 'Mix partner']);
+    }
+    fputcsv($out, $head);
     foreach ($rows as $r) {
-        fputcsv($out, [
+        $base = [
             (string)($r['category_name'] ?? ''),
             (string)($r['full_name'] ?? ''),
             bm_gender_label((string)($r['gender'] ?? '')),
@@ -1475,11 +1499,26 @@ function bm_parent_output_confirmed_csv(array $tournament, array $rows, string $
             (string)(($r['mobile'] ?? '') !== '' ? $r['mobile'] : ($r['contact_mobile'] ?? '')),
             (string)($r['address'] ?? ''),
             bm_parent_row_event_labels($r),
-            bm_parent_payment_label((string)($r['payment_status'] ?? ''), (int)($r['payment_amount'] ?? 0)),
-            (string)($r['payment_utr'] ?? ''),
-            (string)($r['d_full_name'] ?? ''),
-            (string)($r['m_full_name'] ?? ''),
-        ]);
+        ];
+        if ($isDeclined) {
+            $payDate = trim((string)($r['payment_date'] ?? ''));
+            fputcsv($out, array_merge($base, [
+                bm_decline_reason_label((string)($r['decline_reason'] ?? '')),
+                $payDate !== '' ? $payDate : '',
+                (string)($r['payment_utr'] ?? ''),
+                (string)($r['payment_sender'] ?? ''),
+                (string)((int)($r['payment_amount'] ?? 0)),
+                (string)($r['d_full_name'] ?? ''),
+                (string)($r['m_full_name'] ?? ''),
+            ]));
+        } else {
+            fputcsv($out, array_merge($base, [
+                bm_parent_payment_label((string)($r['payment_status'] ?? ''), (int)($r['payment_amount'] ?? 0)),
+                (string)($r['payment_utr'] ?? ''),
+                (string)($r['d_full_name'] ?? ''),
+                (string)($r['m_full_name'] ?? ''),
+            ]));
+        }
     }
     fclose($out);
     exit;

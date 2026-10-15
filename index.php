@@ -30,6 +30,7 @@ require __DIR__ . '/includes/header.php';
     <?php $homeTid = bm_current_tournament_id(); ?>
     <a class="btn btn-primary" href="tournament-form.php">New tournament</a>
     <a class="btn" href="confirmed.php<?= $homeTid > 0 ? '?id=' . $homeTid : '' ?>">Confirmed entries</a>
+    <a class="btn" href="declined.php<?= $homeTid > 0 ? '?id=' . $homeTid : '' ?>">Declined entries</a>
     <a class="btn" href="player-form.php">Add player</a>
   </div>
 </section>

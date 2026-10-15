@@ -177,12 +177,12 @@ $payDateShow = $payDateShow !== '' ? bm_fmt_date($payDateShow) : '—';
      Reference no / UTR: <strong><?= bm_h(trim((string)($sub['payment_utr'] ?? '')) !== '' ? (string)$sub['payment_utr'] : '—') ?></strong><br>
      Sender name: <strong><?= bm_h(trim((string)($sub['payment_sender'] ?? '')) !== '' ? (string)$sub['payment_sender'] : '—') ?></strong></p>
   <?php if (in_array($paySt, ['review', 'declined'], true)): ?>
-  <form method="post" class="form-actions" style="margin-bottom:1rem;">
+  <div class="review-actions" style="justify-content:flex-start;margin-bottom:1rem;">
+  <form method="post" class="inline">
     <input type="hidden" name="id" value="<?= $id ?>">
-    <button type="submit" name="accept_paid" value="1" class="btn btn-primary" <?= bm_parent_confirm_attr('accept_paid') ?>>Accept (statement matches)</button>
-    <button type="submit" name="accept_pending" value="1" class="btn" <?= bm_parent_confirm_attr('accept_pending') ?>>Payment pending</button>
+    <button type="submit" name="accept_paid" value="1" class="btn btn-primary" <?= bm_parent_confirm_attr('accept_paid') ?>>Accept</button>
   </form>
-  <details class="drop" style="margin-bottom:1rem;">
+  <details class="drop">
     <summary class="btn btn-danger">Decline</summary>
     <div class="drop-menu">
       <?php foreach (bm_decline_reasons() as $code => $lab): ?>
@@ -193,6 +193,11 @@ $payDateShow = $payDateShow !== '' ? bm_fmt_date($payDateShow) : '—';
       <?php endforeach; ?>
     </div>
   </details>
+  <form method="post" class="inline">
+    <input type="hidden" name="id" value="<?= $id ?>">
+    <button type="submit" name="accept_pending" value="1" class="btn" <?= bm_parent_confirm_attr('accept_pending') ?>>Accept without payment</button>
+  </form>
+  </div>
   <?php elseif ($paySt === 'pending'): ?>
   <form method="post" class="form-actions" style="margin-bottom:1rem;">
     <input type="hidden" name="id" value="<?= $id ?>">

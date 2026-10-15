@@ -224,14 +224,14 @@ $renderReviewRow = static function (array $ps, int $n): void {
     echo '<div><span class="review-k">Event</span>' . bm_h(implode(', ', $labs)) . '</div>';
     echo '<div><span class="review-k">Status</span><span class="status-pill">' . bm_h(bm_parent_payment_label($st, $amt)) . '</span></div>';
     echo '</div><div class="review-actions">';
+    echo '<form method="post" class="inline"><button type="submit" name="accept_paid" value="' . (int)$ps['id'] . '" class="btn btn-sm btn-primary" ' . bm_parent_confirm_attr('accept_paid') . '>Accept</button></form>';
     echo '<details class="drop"><summary class="btn btn-sm btn-danger">Decline</summary><div class="drop-menu">';
     foreach (bm_decline_reasons() as $code => $lab) {
         echo '<form method="post"><input type="hidden" name="decline_id" value="' . (int)$ps['id'] . '">';
         echo '<button type="submit" name="decline_reason" value="' . bm_h($code) . '" ' . bm_parent_confirm_attr($code) . '>' . bm_h($lab) . '</button></form>';
     }
     echo '</div></details>';
-    echo '<form method="post" class="inline"><button type="submit" name="accept_paid" value="' . (int)$ps['id'] . '" class="btn btn-sm btn-primary" ' . bm_parent_confirm_attr('accept_paid') . '>Accept</button></form>';
-    echo '<form method="post" class="inline"><button type="submit" name="accept_pending" value="' . (int)$ps['id'] . '" class="btn btn-sm" ' . bm_parent_confirm_attr('accept_pending') . '>Payment pending</button></form>';
+    echo '<form method="post" class="inline"><button type="submit" name="accept_pending" value="' . (int)$ps['id'] . '" class="btn btn-sm" ' . bm_parent_confirm_attr('accept_pending') . '>Accept without payment</button></form>';
     echo '</div></article>';
 };
 
@@ -249,6 +249,7 @@ require __DIR__ . '/includes/header.php';
   <div class="page-actions">
     <a class="btn btn-primary" href="tournament-entries.php?tournament_id=<?= $id ?>">Assign players / categories / events</a>
     <a class="btn" href="confirmed.php?id=<?= $id ?>">Confirmed entries</a>
+    <a class="btn" href="declined.php?id=<?= $id ?>">Declined entries</a>
     <a class="btn" href="parent-verify.php?tournament_id=<?= $id ?>">Verify / print / Excel</a>
     <a class="btn" href="report.php?tournament_id=<?= $id ?>">Report</a>
     <a class="btn" href="report.php?saved=1&amp;tournament_id=<?= $id ?>&amp;st_tournament=<?= $id ?>#saved-teams">Saved teams</a>
