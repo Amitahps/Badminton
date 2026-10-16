@@ -5,6 +5,8 @@ $pageTitle = $pageTitle ?? BM_APP_NAME;
 $flashes = bm_get_flashes();
 $loggedIn = bm_is_logged_in();
 $script = basename($_SERVER['PHP_SELF'] ?? '');
+$isParentShare = $script === 'open.php' || str_starts_with($script, 'join');
+$showAdminNav = $loggedIn && !$isParentShare;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -18,7 +20,7 @@ $script = basename($_SERVER['PHP_SELF'] ?? '');
   <link rel="stylesheet" href="assets/css/app.css?v=parent16">
 </head>
 <body>
-<?php if ($loggedIn): ?>
+<?php if ($showAdminNav): ?>
 <header class="topbar">
   <a class="brand" href="index.php">
     <span class="brand-mark" aria-hidden="true"></span>
