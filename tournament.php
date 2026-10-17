@@ -178,12 +178,15 @@ foreach ($categories as $c) {
 $publicToken = bm_tournament_ensure_public_token($pdo, $tournament);
 $parentLink = bm_join_url($publicToken);
 $parentSubs = $pdo->prepare("
-    SELECT s.id, s.created_at, s.event_codes, s.receipt_code, s.father_name, s.contact_mobile,
+    SELECT s.id, s.created_at, s.event_codes, s.receipt_code, s.contact_mobile,
            s.payment_status, s.payment_amount, s.payment_utr, s.payment_date, s.payment_sender, s.decline_reason,
-           c.name AS category_name, p.full_name
+           c.name AS category_name, p.full_name,
+           dp.full_name AS d_full_name, mp.full_name AS m_full_name
     FROM parent_submissions s
     JOIN age_categories c ON c.id = s.age_category_id
     JOIN players p ON p.id = s.primary_player_id
+    LEFT JOIN players dp ON dp.id = s.double_partner_id
+    LEFT JOIN players mp ON mp.id = s.mix_partner_id
     WHERE s.tournament_id = ?
     ORDER BY CASE WHEN s.payment_status = 'review' THEN 0 ELSE 1 END,
              CASE WHEN IFNULL(s.payment_date,'') = '' THEN 1 ELSE 0 END,
@@ -221,8 +224,13 @@ $renderReviewRow = static function (array $ps, int $n): void {
     echo '<div><span class="review-k">Sender</span><strong>' . bm_h((string)($ps['payment_sender'] ?? '')) . '</strong></div>';
     echo '<div><span class="review-k">Amount</span><strong>' . ($amt > 0 ? '₹' . $amt : '—') . '</strong></div>';
     echo '<div><span class="review-k">Player</span><strong><a href="parent-edit.php?id=' . (int)$ps['id'] . '">' . bm_h((string)$ps['full_name']) . '</a></strong>';
-    if (trim((string)($ps['father_name'] ?? '')) !== '') {
-        echo '<div class="muted">' . bm_h((string)$ps['father_name']) . '</div>';
+    $dName = trim((string)($ps['d_full_name'] ?? ''));
+    $mName = trim((string)($ps['m_full_name'] ?? ''));
+    if ($dName !== '') {
+        echo '<div class="muted">Doubles: ' . bm_h($dName) . '</div>';
+    }
+    if ($mName !== '') {
+        echo '<div class="muted">Mix: ' . bm_h($mName) . '</div>';
     }
     if (trim((string)($ps['contact_mobile'] ?? '')) !== '') {
         echo '<div class="muted">' . bm_h((string)$ps['contact_mobile']) . '</div>';
