@@ -305,14 +305,14 @@ $feeStats = bm_parent_tournament_stats($parentRows);
   </div>
   <?php if ($reviewByDate): ?>
   <p class="hint" style="margin-top:0.85rem;"><?= count($parentRows) ?> parent submission(s). Check date-wise against the bank statement. Decline opens four mismatch reasons. Accept and Decline ask you to confirm first.</p>
-  <?php foreach ($reviewByDate as $dateKey => $list): ?>
+  <?php $reviewSerial = 0; foreach ($reviewByDate as $dateKey => $list): ?>
   <details class="review-date" open>
     <summary class="review-date-head">
       <span>Payment date <?= $dateKey === '_none' ? 'not given' : bm_h(bm_fmt_date($dateKey)) ?></span>
       <span class="review-count"><?= count($list) ?></span>
     </summary>
     <div class="review-date-body">
-    <?php foreach ($list as $i => $ps) { $renderReviewRow($ps, $i + 1); } ?>
+    <?php foreach ($list as $ps) { $reviewSerial++; $renderReviewRow($ps, $reviewSerial); } ?>
     </div>
   </details>
   <?php endforeach; ?>

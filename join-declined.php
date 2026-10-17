@@ -41,7 +41,7 @@ require __DIR__ . '/includes/header.php';
   <div>
     <p class="eyebrow"><?= bm_h($tournament['name']) ?></p>
     <h1>Declined entries</h1>
-    <p class="lede">Your payment / sender name, payment date / amount sent did not match the bank statement. Open your player details, correct the empty field and submit again.</p>
+    <p class="lede">Correct the details as per the rejection reason and resubmit.</p>
   </div>
 </section>
 <?php if ($code === ''): ?>

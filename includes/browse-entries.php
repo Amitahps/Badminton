@@ -11,6 +11,7 @@ declare(strict_types=1);
 /** @var string $view */
 /** @var string $receiptsUrl */
 /** @var bool $allowExport */
+/** @var string $browseLede */
 
 $browseMode = $browseMode ?? 'confirmed';
 $grouped = $grouped ?? [];
@@ -24,6 +25,7 @@ if (!in_array($view, ['all', 'category'], true)) {
 }
 $receiptsUrl = $receiptsUrl ?? '';
 $allowExport = $allowExport ?? true;
+$browseLede = trim((string)($browseLede ?? ''));
 $openAll = !empty($openAll) || trim($q) !== '' || $view === 'all';
 $total = 0;
 $flat = [];
@@ -99,7 +101,9 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
 <section class="page-head">
   <div>
     <h1><?= bm_h((string)($tournament['name'] ?? 'Tournament')) ?></h1>
-    <p class="lede"><?php if ($isReceipts): ?>
+    <p class="lede"><?php if (!empty($browseLede)): ?>
+      <?= bm_h((string)$browseLede) ?>
+    <?php elseif ($isReceipts): ?>
       Receipts for players whose online payment the organiser has confirmed. Entries still pending cash are not listed.
     <?php elseif ($isDeclined): ?>
       Your payment / sender name, payment date / amount sent did not match the bank statement. Open your player details, correct the empty field and submit again.

@@ -1696,14 +1696,14 @@ function bm_parent_choice_cards(string $token, string $parentCode = '', string $
         'confirmed' => [
             'href' => 'join-confirmed.php?t=' . $t,
             'title' => 'Confirmed Entries',
-            'note' => 'List of entries accepted by officials. Download a receipt only after online payment is confirmed. Copy of receipt is mandatory on the day of tournament.',
+            'note' => 'Download and carry the payment receipt on tournament day. Players confirmed without online payment must pay the fee and collect their receipt at the venue.',
         ],
     ];
     if ($showDeclined) {
         $items['declined'] = [
             'href' => 'join-declined.php?t=' . $t . $p,
             'title' => 'Declined Entries',
-            'note' => 'Your payment / sender name, payment date / amount sent did not match the bank statement. Open your player details, correct the empty field and submit again.',
+            'note' => 'Correct the details as per the rejection reason and resubmit.',
         ];
     }
     echo '<p class="hint no-print" style="margin-top:0;"><a href="open.php">All tournaments</a></p>';
