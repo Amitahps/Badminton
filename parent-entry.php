@@ -193,37 +193,33 @@ function bm_parent_find_or_create_player(PDO $pdo, array $data, string $who = 'P
     }
 
     $existing = null;
-    if ($bai !== '') {
-        $st = $pdo->prepare('SELECT * FROM players WHERE LOWER(TRIM(bai_id)) = LOWER(?) LIMIT 1');
-        $st->execute([$bai]);
-        $existing = $st->fetch() ?: null;
-    }
-    if (!$existing && $pba !== '') {
-        $st = $pdo->prepare('SELECT * FROM players WHERE LOWER(TRIM(pbi_id)) = LOWER(?) LIMIT 1');
-        $st->execute([$pba]);
-        $existing = $st->fetch() ?: null;
+    $matchedId = '';
+    foreach ([$bai, $pba] as $idValue) {
+        if ($idValue === '') {
+            continue;
+        }
+        $found = bm_player_by_registration_id($pdo, $idValue, 0);
+        if (!$found) {
+            continue;
+        }
+        if (!$existing) {
+            $existing = $found;
+            $matchedId = $idValue;
+            continue;
+        }
+        if ((int)$found['id'] !== (int)$existing['id']) {
+            throw new RuntimeException($idValue . ' already used by ' . (string)$found['full_name'] . '.');
+        }
     }
 
     if ($existing) {
         $eid = (int)$existing['id'];
-        if ($bai !== '') {
-            $st = $pdo->prepare('SELECT full_name FROM players WHERE LOWER(TRIM(bai_id)) = LOWER(?) AND id != ? LIMIT 1');
-            $st->execute([$bai, $eid]);
-            $other = $st->fetchColumn();
-            if ($other) {
-                throw new RuntimeException('BAI ID already used by ' . $other . '.');
-            }
+        if (!bm_player_names_match($name, (string)$existing['full_name'])) {
+            throw new RuntimeException($matchedId . ' already used by ' . (string)$existing['full_name'] . '.');
         }
-        if ($pba !== '') {
-            $st = $pdo->prepare('SELECT full_name FROM players WHERE LOWER(TRIM(pbi_id)) = LOWER(?) AND id != ? LIMIT 1');
-            $st->execute([$pba, $eid]);
-            $other = $st->fetchColumn();
-            if ($other) {
-                throw new RuntimeException('PBA ID already used by ' . $other . '.');
-            }
-        }
+        bm_assert_unique_player_ids($pdo, $bai !== '' ? $bai : null, $pba !== '' ? $pba : null, $eid);
         if ((string)$existing['gender'] !== $gender) {
-            throw new RuntimeException('This BAI/PBA ID is already saved as ' . bm_gender_label((string)$existing['gender']) . '.');
+            throw new RuntimeException('This BAI/PBI ID is already saved as ' . bm_gender_label((string)$existing['gender']) . '.');
         }
         $pdo->prepare("UPDATE players SET
             full_name=?, bai_id=COALESCE(NULLIF(?, ''), bai_id), pbi_id=COALESCE(NULLIF(?, ''), pbi_id),

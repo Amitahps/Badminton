@@ -313,28 +313,57 @@ function bm_find_saved_teams(PDO $pdo, int $tournamentId, int $categoryId, strin
     return $teams;
 }
 
+function bm_player_names_match(string $a, string $b): bool
+{
+    $norm = static function (string $s): string {
+        $s = trim($s);
+        $s = preg_replace('/\s+/u', ' ', $s) ?? $s;
+        return function_exists('mb_strtolower') ? mb_strtolower($s, 'UTF-8') : strtolower($s);
+    };
+    $a = $norm($a);
+    return $a !== '' && $a === $norm($b);
+}
+
 /**
- * Reject a second player with the same BAI ID or PBA ID (any name).
+ * A BAI ID or PBI ID belongs to one player. The same number cannot be reused
+ * as either ID by someone else. Blank IDs are allowed. Father name, contact
+ * and address may be shared.
+ *
+ * @return array<string,mixed>|null
+ */
+function bm_player_by_registration_id(PDO $pdo, string $idValue, int $exceptPlayerId = 0): ?array
+{
+    $idValue = trim($idValue);
+    if ($idValue === '') {
+        return null;
+    }
+    $st = $pdo->prepare("
+        SELECT * FROM players
+        WHERE id != ?
+          AND (
+            (TRIM(IFNULL(bai_id, '')) != '' AND LOWER(TRIM(bai_id)) = LOWER(?))
+            OR (TRIM(IFNULL(pbi_id, '')) != '' AND LOWER(TRIM(pbi_id)) = LOWER(?))
+          )
+        LIMIT 1
+    ");
+    $st->execute([$exceptPlayerId, $idValue, $idValue]);
+    $row = $st->fetch();
+    return $row ?: null;
+}
+
+/**
+ * Reject a second player with the same BAI ID or PBI ID.
  * Blank IDs are allowed. Editing the same player keeps their own IDs.
  */
 function bm_assert_unique_player_ids(PDO $pdo, ?string $bai, ?string $pba, int $exceptPlayerId = 0): void
 {
-    $bai = trim((string)$bai);
-    $pba = trim((string)$pba);
-    if ($bai !== '') {
-        $st = $pdo->prepare('SELECT full_name FROM players WHERE LOWER(TRIM(bai_id)) = LOWER(?) AND id != ? LIMIT 1');
-        $st->execute([$bai, $exceptPlayerId]);
-        $name = $st->fetchColumn();
-        if ($name) {
-            throw new RuntimeException('BAI ID already used by ' . $name . '.');
+    foreach ([trim((string)$bai), trim((string)$pba)] as $idValue) {
+        if ($idValue === '') {
+            continue;
         }
-    }
-    if ($pba !== '') {
-        $st = $pdo->prepare('SELECT full_name FROM players WHERE LOWER(TRIM(pbi_id)) = LOWER(?) AND id != ? LIMIT 1');
-        $st->execute([$pba, $exceptPlayerId]);
-        $name = $st->fetchColumn();
-        if ($name) {
-            throw new RuntimeException('PBA ID already used by ' . $name . '.');
+        $owner = bm_player_by_registration_id($pdo, $idValue, $exceptPlayerId);
+        if ($owner) {
+            throw new RuntimeException($idValue . ' already used by ' . (string)$owner['full_name'] . '.');
         }
     }
 }
