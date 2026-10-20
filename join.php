@@ -117,7 +117,7 @@ require __DIR__ . '/includes/header.php';
 
     <label>BAI ID<input type="text" name="bai_id" id="bai_id" maxlength="80" value="<?= bm_h($form['bai_id']) ?>"></label>
     <label>PBI ID<input type="text" name="pbi_id" id="pbi_id" maxlength="80" value="<?= bm_h($form['pbi_id']) ?>"></label>
-    <p class="hint span-2" id="player-id-note">If this BAI ID or PBI ID was saved before, name, gender, father, contact and district fill in. Empty fields can be typed. Every field can be changed.</p>
+    <p class="hint span-2" id="player-id-note">If this BAI ID or PBI ID was saved before, the other ID and the player details fill in. Change one ID and the other ID changes with it. Every field can be edited.</p>
     <label>Player name
       <input type="text" name="full_name" id="full_name" required maxlength="160" value="<?= bm_h($form['full_name']) ?>">
     </label>
@@ -308,55 +308,56 @@ require __DIR__ . '/includes/header.php';
     var pbiEl = document.getElementById(pbiId);
     var note = document.getElementById(noteId);
     var loaded = null;
-    function val(el) { return el ? String(el.value || '') : ''; }
-    function fill(el, key) {
-      if (!el) return;
-      var incoming = loadedNext[key] || '';
-      if (val(el) === '' || (loaded && val(el) === (loaded[key] || ''))) el.value = incoming;
-    }
-    var loadedNext = null;
-    function apply(data) {
-      if (data && data.conflict) {
-        if (note) note.textContent = data.message || 'These IDs belong to different players.';
-        return;
-      }
+    var seq = 0;
+    function setv(el, value) { if (el) el.value = value || ''; }
+    function apply(data, source) {
       if (data && data.found) {
-        loadedNext = data;
-        fill(fields.name, 'full_name');
-        fill(fields.father, 'father_name');
-        fill(fields.contact, 'contact_mobile');
-        fill(fields.district, 'district');
-        if (useGender && fields.gender && (val(fields.gender) === '' || (loaded && val(fields.gender) === (loaded.gender || '')))) {
-          fields.gender.value = data.gender || '';
-        }
-        if (baiEl && val(baiEl).trim() === '' && data.bai_id) baiEl.value = data.bai_id;
-        if (pbiEl && val(pbiEl).trim() === '' && data.pbi_id) pbiEl.value = data.pbi_id;
+        setv(fields.name, data.full_name);
+        setv(fields.father, data.father_name);
+        setv(fields.contact, data.contact_mobile);
+        setv(fields.district, data.district);
+        if (useGender && fields.gender) fields.gender.value = data.gender || '';
+        if (source === 'bai') setv(pbiEl, data.pbi_id);
+        if (source === 'pbi') setv(baiEl, data.bai_id);
         loaded = data;
         if (note) note.textContent = 'Saved details filled in. You can change any field.';
         if (useGender) sync();
         return;
       }
       if (loaded) {
-        [['name','full_name'],['father','father_name'],['contact','contact_mobile'],['district','district']].forEach(function(pair){
-          var el = fields[pair[0]];
-          if (el && val(el) === (loaded[pair[1]] || '')) el.value = '';
-        });
-        if (useGender && fields.gender && val(fields.gender) === (loaded.gender || '')) fields.gender.value = '';
+        setv(fields.name, '');
+        setv(fields.father, '');
+        setv(fields.contact, '');
+        setv(fields.district, '');
+        if (useGender && fields.gender) fields.gender.value = '';
+        if (source === 'bai') setv(pbiEl, '');
+        if (source === 'pbi') setv(baiEl, '');
         loaded = null;
         if (useGender) sync();
       }
       if (note && noteId !== 'player-id-note') note.textContent = '';
-      if (note && noteId === 'player-id-note') note.textContent = 'If this BAI ID or PBI ID was saved before, name, gender, father, contact and district fill in. Empty fields can be typed. Every field can be changed.';
+      if (note && noteId === 'player-id-note') note.textContent = 'If this BAI ID or PBI ID was saved before, the other ID and the player details fill in. Change one ID and the other ID changes with it. Every field can be edited.';
     }
-    function run() {
-      var bai = baiEl ? baiEl.value.trim() : '';
-      var pbi = pbiEl ? pbiEl.value.trim() : '';
-      if (!bai && !pbi) { apply({found:false}); return; }
-      var url = 'join-lookup.php?t=' + encodeURIComponent(lookupToken) + '&bai=' + encodeURIComponent(bai) + '&pbi=' + encodeURIComponent(pbi);
-      fetch(url).then(function(r){ return r.json(); }).then(apply).catch(function(){});
+    function run(source) {
+      var typed = source === 'bai' ? (baiEl ? baiEl.value.trim() : '') : (pbiEl ? pbiEl.value.trim() : '');
+      var n = ++seq;
+      if (!typed) { apply({found:false}, source); return; }
+      var url = 'join-lookup.php?t=' + encodeURIComponent(lookupToken)
+        + '&bai=' + encodeURIComponent(source === 'bai' ? typed : '')
+        + '&pbi=' + encodeURIComponent(source === 'pbi' ? typed : '');
+      fetch(url).then(function(r){ return r.json(); }).then(function(data){
+        if (n !== seq) return;
+        apply(data, source);
+      }).catch(function(){});
     }
-    if (baiEl) { baiEl.addEventListener('change', run); baiEl.addEventListener('blur', run); }
-    if (pbiEl) { pbiEl.addEventListener('change', run); pbiEl.addEventListener('blur', run); }
+    if (baiEl) {
+      baiEl.addEventListener('change', function(){ run('bai'); });
+      baiEl.addEventListener('blur', function(){ run('bai'); });
+    }
+    if (pbiEl) {
+      pbiEl.addEventListener('change', function(){ run('pbi'); });
+      pbiEl.addEventListener('blur', function(){ run('pbi'); });
+    }
   }
   watchIds('bai_id', 'pbi_id', {
     name: document.getElementById('full_name'),
