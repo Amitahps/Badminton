@@ -28,7 +28,9 @@ if (isset($_POST['save_parent'])) {
         $result = bm_parent_save_submission($pdo, $tournament, $_POST, $_FILES);
         bm_remember_parent_receipt($token, $result['receipt']);
         bm_remember_parent_code($token, (string)$result['parent_code']);
-        bm_flash('success', 'Saved. For a paid entry the organiser will check date, UTR and sender name against the bank statement before the player is on the list.');
+        bm_flash('success', $isPaid
+            ? 'Saved. For a paid entry the organiser will check date, UTR and sender name against the bank statement before the player is on the list.'
+            : 'Saved.');
         bm_redirect('join-mine.php?t=' . rawurlencode($token) . '&p=' . rawurlencode((string)$result['parent_code']));
     } catch (Throwable $e) {
         bm_flash('error', $e->getMessage());
@@ -104,7 +106,7 @@ require __DIR__ . '/includes/header.php';
     <input type="hidden" name="parent_code" value="<?= bm_h($parentCode) ?>">
     <?php endif; ?>
 
-    <label class="span-2">1. Age category
+    <label class="span-2">Age category
       <select name="age_key" id="age_key" required>
         <option value="">Select age</option>
         <?php foreach ($ageOptions as $opt): ?>
@@ -113,7 +115,6 @@ require __DIR__ . '/includes/header.php';
       </select>
     </label>
 
-    <p class="hint span-2">2. Player</p>
     <label>Player name
       <input type="text" name="full_name" required maxlength="160" value="<?= bm_h($form['full_name']) ?>">
     </label>
@@ -137,7 +138,7 @@ require __DIR__ . '/includes/header.php';
     </label>
 
     <div id="event-box" class="event-pick-box">
-      <p class="hint">3. Events for this age (tick all that apply)</p>
+      <p class="hint">Events for this age (tick all that apply)</p>
       <div class="event-row">
         <input type="checkbox" class="ev" id="ev-single" name="events[]" value="single" <?= in_array('single', $form['events'], true) ? 'checked' : '' ?>>
         <label for="ev-single">Single<?php if ($isPaid && (int)$tournament['fee_single'] > 0): ?> <span class="muted">(<?= bm_h(bm_rupees((int)$tournament['fee_single'])) ?>)</span><?php endif; ?></label>

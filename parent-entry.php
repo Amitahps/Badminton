@@ -1710,8 +1710,7 @@ function bm_parent_choice_cards(string $token, string $parentCode = '', string $
             'note' => 'Correct the details as per the rejection reason and resubmit.',
         ];
     }
-    echo '<p class="hint no-print" style="margin-top:0;"><a href="open.php">All tournaments</a></p>';
-    echo '<div class="choice-grid' . ($showDeclined ? '' : ' choice-2') . '">';
+    echo '<div class="choice-grid">';
     foreach ($items as $key => $item) {
         $cls = 'choice-card' . ($current === $key ? ' is-current' : '');
         echo '<a class="' . $cls . '" href="' . $item['href'] . '">';
