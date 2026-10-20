@@ -21,7 +21,7 @@ if (!in_array($view, ['all', 'category'], true)) {
 }
 $rows = bm_parent_list_for_browse($pdo, (int)$tournament['id'], ['paid', 'pending', 'na'], $q);
 $allowExport = false;
-$browseLede = 'Download and carry the payment receipt on tournament day. Players confirmed without online payment must pay the fee and collect their receipt at the venue.';
+$browseLede = bm_parent_confirmed_note($tournament);
 $grouped = bm_parent_group_by_category($rows);
 $browseMode = 'confirmed';
 $filterAction = 'join-confirmed.php';

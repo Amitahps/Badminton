@@ -1681,6 +1681,14 @@ function bm_parent_output_unpaid_csv(array $tournament, array $rows, string $lab
     exit;
 }
 
+function bm_parent_confirmed_note(array $tournament): string
+{
+    if (bm_tournament_is_paid($tournament)) {
+        return 'Download and carry the payment receipt on tournament day. Players confirmed without online payment must pay the fee and collect their receipt at the venue.';
+    }
+    return 'This list includes only the names of players whose entries have been confirmed. The participation fee is pending and must be paid on the day of the tournament.';
+}
+
 function bm_parent_choice_cards(string $token, string $parentCode = '', string $current = 'new'): void
 {
     $t = rawurlencode($token);
@@ -1696,7 +1704,7 @@ function bm_parent_choice_cards(string $token, string $parentCode = '', string $
         'confirmed' => [
             'href' => 'join-confirmed.php?t=' . $t,
             'title' => 'Confirmed Entries',
-            'note' => 'Download and carry the payment receipt on tournament day. Players confirmed without online payment must pay the fee and collect their receipt at the venue.',
+            'note' => $tournament ? bm_parent_confirmed_note($tournament) : bm_parent_confirmed_note(['is_paid' => 1]),
         ],
     ];
     if ($showDeclined) {
