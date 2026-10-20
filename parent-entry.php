@@ -1685,6 +1685,41 @@ function bm_parent_confirmed_note(array $tournament): string
     return 'This list includes only the names of players whose entries have been confirmed. The participation fee is pending and must be paid on the day of the tournament.';
 }
 
+/**
+ * @return array{found:bool,conflict?:bool,message?:string,full_name?:string,gender?:string,bai_id?:string,pbi_id?:string,father_name?:string,contact_mobile?:string,district?:string}
+ */
+function bm_parent_lookup_details(PDO $pdo, string $bai, string $pbi): array
+{
+    $bai = trim($bai);
+    $pbi = trim($pbi);
+    if ($bai === '' && $pbi === '') {
+        return ['found' => false];
+    }
+    $byBai = $bai !== '' ? bm_player_by_registration_id($pdo, $bai, 0) : null;
+    $byPbi = $pbi !== '' ? bm_player_by_registration_id($pdo, $pbi, 0) : null;
+    if ($byBai && $byPbi && (int)$byBai['id'] !== (int)$byPbi['id']) {
+        return [
+            'found' => false,
+            'conflict' => true,
+            'message' => $bai . ' already used by ' . (string)$byBai['full_name'] . '. ' . $pbi . ' already used by ' . (string)$byPbi['full_name'] . '.',
+        ];
+    }
+    $row = $byBai ?: $byPbi;
+    if (!$row) {
+        return ['found' => false];
+    }
+    return [
+        'found' => true,
+        'full_name' => (string)($row['full_name'] ?? ''),
+        'gender' => (string)($row['gender'] ?? ''),
+        'bai_id' => trim((string)($row['bai_id'] ?? '')),
+        'pbi_id' => trim((string)($row['pbi_id'] ?? '')),
+        'father_name' => trim((string)($row['father_name'] ?? '')),
+        'contact_mobile' => trim((string)($row['mobile'] ?? '')),
+        'district' => trim((string)($row['address'] ?? '')),
+    ];
+}
+
 function bm_parent_choice_cards(string $token, string $parentCode = '', string $current = 'new'): void
 {
     $t = rawurlencode($token);

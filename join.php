@@ -115,8 +115,11 @@ require __DIR__ . '/includes/header.php';
       </select>
     </label>
 
+    <label>BAI ID<input type="text" name="bai_id" id="bai_id" maxlength="80" value="<?= bm_h($form['bai_id']) ?>"></label>
+    <label>PBI ID<input type="text" name="pbi_id" id="pbi_id" maxlength="80" value="<?= bm_h($form['pbi_id']) ?>"></label>
+    <p class="hint span-2" id="player-id-note">If this BAI ID or PBI ID was saved before, name, gender, father, contact and district fill in. Empty fields can be typed. Every field can be changed.</p>
     <label>Player name
-      <input type="text" name="full_name" required maxlength="160" value="<?= bm_h($form['full_name']) ?>">
+      <input type="text" name="full_name" id="full_name" required maxlength="160" value="<?= bm_h($form['full_name']) ?>">
     </label>
     <label>Gender
       <select name="gender" id="gender" required>
@@ -125,16 +128,14 @@ require __DIR__ . '/includes/header.php';
         <option value="girl" <?= $form['gender'] === 'girl' ? 'selected' : '' ?>>Girl</option>
       </select>
     </label>
-    <label>BAI ID<input type="text" name="bai_id" maxlength="80" value="<?= bm_h($form['bai_id']) ?>"></label>
-    <label>PBI ID<input type="text" name="pbi_id" maxlength="80" value="<?= bm_h($form['pbi_id']) ?>"></label>
     <label>Father’s name
-      <input type="text" name="father_name" required maxlength="160" value="<?= bm_h($form['father_name']) ?>">
+      <input type="text" name="father_name" id="father_name" required maxlength="160" value="<?= bm_h($form['father_name']) ?>">
     </label>
     <label>Contact
-      <input type="tel" name="contact_mobile" required maxlength="15" inputmode="numeric" value="<?= bm_h($form['contact_mobile']) ?>" placeholder="10-digit mobile">
+      <input type="tel" name="contact_mobile" id="contact_mobile" required maxlength="15" inputmode="numeric" value="<?= bm_h($form['contact_mobile']) ?>" placeholder="10-digit mobile">
     </label>
     <label class="span-2">District
-      <input type="text" name="district" required maxlength="120" value="<?= bm_h($form['district']) ?>">
+      <input type="text" name="district" id="district" required maxlength="120" value="<?= bm_h($form['district']) ?>">
     </label>
 
     <div id="event-box" class="event-pick-box">
@@ -159,10 +160,11 @@ require __DIR__ . '/includes/header.php';
     <div id="double-box" class="partner-box form-grid">
       <h2>Doubles partner</h2>
       <p class="hint">Required because Doubles is selected. Same gender as the player.</p>
+      <label>Partner BAI ID<input type="text" name="d_bai_id" id="d_bai_id" maxlength="80" value="<?= bm_h($form['d_bai_id']) ?>"></label>
+      <label>Partner PBI ID<input type="text" name="d_pbi_id" id="d_pbi_id" maxlength="80" value="<?= bm_h($form['d_pbi_id']) ?>"></label>
+      <p class="hint span-2" id="d-id-note"></p>
       <label>Partner name<input type="text" name="d_full_name" id="d_full_name" maxlength="160" value="<?= bm_h($form['d_full_name']) ?>"></label>
       <p class="hint" id="d-gender-hint"></p>
-      <label>Partner BAI ID<input type="text" name="d_bai_id" maxlength="80" value="<?= bm_h($form['d_bai_id']) ?>"></label>
-      <label>Partner PBI ID<input type="text" name="d_pbi_id" maxlength="80" value="<?= bm_h($form['d_pbi_id']) ?>"></label>
       <label>Partner father’s name<input type="text" name="d_father_name" id="d_father_name" maxlength="160" value="<?= bm_h($form['d_father_name']) ?>"></label>
       <label>Partner contact<input type="tel" name="d_contact_mobile" id="d_contact_mobile" maxlength="15" inputmode="numeric" value="<?= bm_h($form['d_contact_mobile']) ?>"></label>
       <label class="span-2">Partner district<input type="text" name="d_district" id="d_district" maxlength="120" value="<?= bm_h($form['d_district']) ?>"></label>
@@ -171,10 +173,11 @@ require __DIR__ . '/includes/header.php';
     <div id="mix-box" class="partner-box form-grid">
       <h2>Mix Double partner</h2>
       <p class="hint">Required because Mix Double is selected. Opposite gender (boy + girl).</p>
+      <label>Partner BAI ID<input type="text" name="m_bai_id" id="m_bai_id" maxlength="80" value="<?= bm_h($form['m_bai_id']) ?>"></label>
+      <label>Partner PBI ID<input type="text" name="m_pbi_id" id="m_pbi_id" maxlength="80" value="<?= bm_h($form['m_pbi_id']) ?>"></label>
+      <p class="hint span-2" id="m-id-note"></p>
       <label>Partner name<input type="text" name="m_full_name" id="m_full_name" maxlength="160" value="<?= bm_h($form['m_full_name']) ?>"></label>
       <p class="hint" id="m-gender-hint"></p>
-      <label>Partner BAI ID<input type="text" name="m_bai_id" maxlength="80" value="<?= bm_h($form['m_bai_id']) ?>"></label>
-      <label>Partner PBI ID<input type="text" name="m_pbi_id" maxlength="80" value="<?= bm_h($form['m_pbi_id']) ?>"></label>
       <label>Partner father’s name<input type="text" name="m_father_name" id="m_father_name" maxlength="160" value="<?= bm_h($form['m_father_name']) ?>"></label>
       <label>Partner contact<input type="tel" name="m_contact_mobile" id="m_contact_mobile" maxlength="15" inputmode="numeric" value="<?= bm_h($form['m_contact_mobile']) ?>"></label>
       <label class="span-2">Partner district<input type="text" name="m_district" id="m_district" maxlength="120" value="<?= bm_h($form['m_district']) ?>"></label>
@@ -298,6 +301,82 @@ require __DIR__ . '/includes/header.php';
     utr.value = utr.value.replace(/[^0-9]/g, '');
   });
   sync();
+
+  var lookupToken = <?= json_encode($token, JSON_UNESCAPED_UNICODE) ?>;
+  function watchIds(baiId, pbiId, fields, noteId, useGender) {
+    var baiEl = document.getElementById(baiId);
+    var pbiEl = document.getElementById(pbiId);
+    var note = document.getElementById(noteId);
+    var loaded = null;
+    function val(el) { return el ? String(el.value || '') : ''; }
+    function fill(el, key) {
+      if (!el) return;
+      var incoming = loadedNext[key] || '';
+      if (val(el) === '' || (loaded && val(el) === (loaded[key] || ''))) el.value = incoming;
+    }
+    var loadedNext = null;
+    function apply(data) {
+      if (data && data.conflict) {
+        if (note) note.textContent = data.message || 'These IDs belong to different players.';
+        return;
+      }
+      if (data && data.found) {
+        loadedNext = data;
+        fill(fields.name, 'full_name');
+        fill(fields.father, 'father_name');
+        fill(fields.contact, 'contact_mobile');
+        fill(fields.district, 'district');
+        if (useGender && fields.gender && (val(fields.gender) === '' || (loaded && val(fields.gender) === (loaded.gender || '')))) {
+          fields.gender.value = data.gender || '';
+        }
+        if (baiEl && val(baiEl).trim() === '' && data.bai_id) baiEl.value = data.bai_id;
+        if (pbiEl && val(pbiEl).trim() === '' && data.pbi_id) pbiEl.value = data.pbi_id;
+        loaded = data;
+        if (note) note.textContent = 'Saved details filled in. You can change any field.';
+        if (useGender) sync();
+        return;
+      }
+      if (loaded) {
+        [['name','full_name'],['father','father_name'],['contact','contact_mobile'],['district','district']].forEach(function(pair){
+          var el = fields[pair[0]];
+          if (el && val(el) === (loaded[pair[1]] || '')) el.value = '';
+        });
+        if (useGender && fields.gender && val(fields.gender) === (loaded.gender || '')) fields.gender.value = '';
+        loaded = null;
+        if (useGender) sync();
+      }
+      if (note && noteId !== 'player-id-note') note.textContent = '';
+      if (note && noteId === 'player-id-note') note.textContent = 'If this BAI ID or PBI ID was saved before, name, gender, father, contact and district fill in. Empty fields can be typed. Every field can be changed.';
+    }
+    function run() {
+      var bai = baiEl ? baiEl.value.trim() : '';
+      var pbi = pbiEl ? pbiEl.value.trim() : '';
+      if (!bai && !pbi) { apply({found:false}); return; }
+      var url = 'join-lookup.php?t=' + encodeURIComponent(lookupToken) + '&bai=' + encodeURIComponent(bai) + '&pbi=' + encodeURIComponent(pbi);
+      fetch(url).then(function(r){ return r.json(); }).then(apply).catch(function(){});
+    }
+    if (baiEl) { baiEl.addEventListener('change', run); baiEl.addEventListener('blur', run); }
+    if (pbiEl) { pbiEl.addEventListener('change', run); pbiEl.addEventListener('blur', run); }
+  }
+  watchIds('bai_id', 'pbi_id', {
+    name: document.getElementById('full_name'),
+    gender: gender,
+    father: document.getElementById('father_name'),
+    contact: document.getElementById('contact_mobile'),
+    district: document.getElementById('district')
+  }, 'player-id-note', true);
+  watchIds('d_bai_id', 'd_pbi_id', {
+    name: dName,
+    father: dFather,
+    contact: dContact,
+    district: dDist
+  }, 'd-id-note', false);
+  watchIds('m_bai_id', 'm_pbi_id', {
+    name: mName,
+    father: mFather,
+    contact: mContact,
+    district: mDist
+  }, 'm-id-note', false);
 })();
 </script>
 <?php endif; ?>
