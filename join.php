@@ -39,7 +39,6 @@ if (isset($_POST['save_parent'])) {
 
 $form = [
     'age_key' => (string)($_POST['age_key'] ?? ''),
-    'father_name' => (string)($_POST['father_name'] ?? ''),
     'contact_mobile' => (string)($_POST['contact_mobile'] ?? ''),
     'full_name' => (string)($_POST['full_name'] ?? ''),
     'gender' => (string)($_POST['gender'] ?? ''),
@@ -50,13 +49,11 @@ $form = [
     'd_full_name' => (string)($_POST['d_full_name'] ?? ''),
     'd_bai_id' => (string)($_POST['d_bai_id'] ?? ''),
     'd_pbi_id' => (string)($_POST['d_pbi_id'] ?? ''),
-    'd_father_name' => (string)($_POST['d_father_name'] ?? ''),
     'd_contact_mobile' => (string)($_POST['d_contact_mobile'] ?? ''),
     'd_district' => (string)($_POST['d_district'] ?? ''),
     'm_full_name' => (string)($_POST['m_full_name'] ?? ''),
     'm_bai_id' => (string)($_POST['m_bai_id'] ?? ''),
     'm_pbi_id' => (string)($_POST['m_pbi_id'] ?? ''),
-    'm_father_name' => (string)($_POST['m_father_name'] ?? ''),
     'm_contact_mobile' => (string)($_POST['m_contact_mobile'] ?? ''),
     'm_district' => (string)($_POST['m_district'] ?? ''),
     'payment_utr' => (string)($_POST['payment_utr'] ?? ''),
@@ -117,7 +114,10 @@ require __DIR__ . '/includes/header.php';
 
     <label>BAI ID<input type="text" name="bai_id" id="bai_id" maxlength="80" value="<?= bm_h($form['bai_id']) ?>"></label>
     <label>PBI ID<input type="text" name="pbi_id" id="pbi_id" maxlength="80" value="<?= bm_h($form['pbi_id']) ?>"></label>
-    <p class="hint span-2" id="player-id-note">If this BAI ID or PBI ID was saved before, the other ID and the player details fill in. Change one ID and the other ID changes with it. Every field can be edited.</p>
+    <p class="hint span-2" id="player-id-note" hidden></p>
+    <div class="id-clear" id="player-clear-row" hidden>
+      <button type="button" class="btn" id="player-clear">Clear</button>
+    </div>
     <label>Player name
       <input type="text" name="full_name" id="full_name" required maxlength="160" value="<?= bm_h($form['full_name']) ?>">
     </label>
@@ -127,9 +127,6 @@ require __DIR__ . '/includes/header.php';
         <option value="boy" <?= $form['gender'] === 'boy' ? 'selected' : '' ?>>Boy</option>
         <option value="girl" <?= $form['gender'] === 'girl' ? 'selected' : '' ?>>Girl</option>
       </select>
-    </label>
-    <label>Father’s name
-      <input type="text" name="father_name" id="father_name" required maxlength="160" value="<?= bm_h($form['father_name']) ?>">
     </label>
     <label>Contact
       <input type="tel" name="contact_mobile" id="contact_mobile" required maxlength="15" inputmode="numeric" value="<?= bm_h($form['contact_mobile']) ?>" placeholder="10-digit mobile">
@@ -162,10 +159,12 @@ require __DIR__ . '/includes/header.php';
       <p class="hint">Required because Doubles is selected. Same gender as the player.</p>
       <label>Partner BAI ID<input type="text" name="d_bai_id" id="d_bai_id" maxlength="80" value="<?= bm_h($form['d_bai_id']) ?>"></label>
       <label>Partner PBI ID<input type="text" name="d_pbi_id" id="d_pbi_id" maxlength="80" value="<?= bm_h($form['d_pbi_id']) ?>"></label>
-      <p class="hint span-2" id="d-id-note"></p>
+      <p class="hint span-2" id="d-id-note" hidden></p>
+      <div class="id-clear" id="d-clear-row" hidden>
+        <button type="button" class="btn" id="d-clear">Clear</button>
+      </div>
       <label>Partner name<input type="text" name="d_full_name" id="d_full_name" maxlength="160" value="<?= bm_h($form['d_full_name']) ?>"></label>
       <p class="hint" id="d-gender-hint"></p>
-      <label>Partner father’s name<input type="text" name="d_father_name" id="d_father_name" maxlength="160" value="<?= bm_h($form['d_father_name']) ?>"></label>
       <label>Partner contact<input type="tel" name="d_contact_mobile" id="d_contact_mobile" maxlength="15" inputmode="numeric" value="<?= bm_h($form['d_contact_mobile']) ?>"></label>
       <label class="span-2">Partner district<input type="text" name="d_district" id="d_district" maxlength="120" value="<?= bm_h($form['d_district']) ?>"></label>
     </div>
@@ -175,10 +174,12 @@ require __DIR__ . '/includes/header.php';
       <p class="hint">Required because Mix Double is selected. Opposite gender (boy + girl).</p>
       <label>Partner BAI ID<input type="text" name="m_bai_id" id="m_bai_id" maxlength="80" value="<?= bm_h($form['m_bai_id']) ?>"></label>
       <label>Partner PBI ID<input type="text" name="m_pbi_id" id="m_pbi_id" maxlength="80" value="<?= bm_h($form['m_pbi_id']) ?>"></label>
-      <p class="hint span-2" id="m-id-note"></p>
+      <p class="hint span-2" id="m-id-note" hidden></p>
+      <div class="id-clear" id="m-clear-row" hidden>
+        <button type="button" class="btn" id="m-clear">Clear</button>
+      </div>
       <label>Partner name<input type="text" name="m_full_name" id="m_full_name" maxlength="160" value="<?= bm_h($form['m_full_name']) ?>"></label>
       <p class="hint" id="m-gender-hint"></p>
-      <label>Partner father’s name<input type="text" name="m_father_name" id="m_father_name" maxlength="160" value="<?= bm_h($form['m_father_name']) ?>"></label>
       <label>Partner contact<input type="tel" name="m_contact_mobile" id="m_contact_mobile" maxlength="15" inputmode="numeric" value="<?= bm_h($form['m_contact_mobile']) ?>"></label>
       <label class="span-2">Partner district<input type="text" name="m_district" id="m_district" maxlength="120" value="<?= bm_h($form['m_district']) ?>"></label>
     </div>
@@ -239,10 +240,8 @@ require __DIR__ . '/includes/header.php';
   var mHint = document.getElementById('m-gender-hint');
   var dName = document.getElementById('d_full_name');
   var mName = document.getElementById('m_full_name');
-  var dFather = document.getElementById('d_father_name');
   var dContact = document.getElementById('d_contact_mobile');
   var dDist = document.getElementById('d_district');
-  var mFather = document.getElementById('m_father_name');
   var mContact = document.getElementById('m_contact_mobile');
   var mDist = document.getElementById('m_district');
   var feeEl = document.getElementById('fee-total');
@@ -275,10 +274,8 @@ require __DIR__ . '/includes/header.php';
     mBox.style.display = showM ? 'grid' : 'none';
     dName.required = showD;
     mName.required = showM;
-    if (dFather) dFather.required = showD;
     if (dContact) dContact.required = showD;
     if (dDist) dDist.required = showD;
-    if (mFather) mFather.required = showM;
     if (mContact) mContact.required = showM;
     if (mDist) mDist.required = showM;
     dHint.textContent = showD ? ('Partner gender: ' + (g() === 'girl' ? 'Girl' : 'Boy') + ' (same as player)') : '';
@@ -310,73 +307,140 @@ require __DIR__ . '/includes/header.php';
     var loaded = null;
     var seq = 0;
     function setv(el, value) { if (el) el.value = value || ''; }
+    function lockInput(el, on) {
+      if (!el) return;
+      el.readOnly = !!on;
+      el.classList.toggle('is-locked', !!on);
+      el.tabIndex = on ? -1 : 0;
+    }
+    function lockGender(on, value) {
+      if (!useGender || !fields.gender) return;
+      var hidden = document.getElementById('gender_locked');
+      if (on) {
+        fields.gender.value = value || '';
+        fields.gender.disabled = true;
+        fields.gender.classList.add('is-locked');
+        if (!hidden) {
+          hidden = document.createElement('input');
+          hidden.type = 'hidden';
+          hidden.id = 'gender_locked';
+          hidden.name = 'gender';
+          fields.gender.form.appendChild(hidden);
+        }
+        hidden.disabled = false;
+        hidden.value = fields.gender.value;
+      } else {
+        fields.gender.disabled = false;
+        fields.gender.classList.remove('is-locked');
+        if (hidden) hidden.disabled = true;
+      }
+    }
+    function lockIdentity(on) {
+      lockInput(fields.name, on);
+      lockInput(baiEl, on);
+      lockInput(pbiEl, on);
+      if (fields.clearRow) fields.clearRow.hidden = !on;
+    }
+    function showNote(text) {
+      if (!note) return;
+      note.textContent = text || '';
+      note.hidden = !text;
+    }
+    function unlockBlank(source) {
+      lockGender(false, '');
+      lockIdentity(false);
+      if (!loaded) return;
+      setv(fields.name, '');
+      setv(fields.contact, '');
+      setv(fields.district, '');
+      if (useGender && fields.gender) fields.gender.value = '';
+      if (source === 'bai') setv(pbiEl, '');
+      if (source === 'pbi') setv(baiEl, '');
+      loaded = null;
+      if (useGender) sync();
+    }
     function apply(data, source) {
+      if (data && data.conflict) {
+        showNote(data.message || '');
+        return;
+      }
+      showNote('');
       if (data && data.found) {
         setv(fields.name, data.full_name);
-        setv(fields.father, data.father_name);
         setv(fields.contact, data.contact_mobile);
         setv(fields.district, data.district);
-        if (useGender && fields.gender) fields.gender.value = data.gender || '';
-        if (source === 'bai') setv(pbiEl, data.pbi_id);
-        if (source === 'pbi') setv(baiEl, data.bai_id);
+        if (source === 'bai' || source === 'both') setv(pbiEl, data.pbi_id);
+        if (source === 'pbi' || source === 'both') setv(baiEl, data.bai_id);
+        lockIdentity(true);
+        lockGender(true, data.gender || '');
         loaded = data;
-        if (note) note.textContent = 'Saved details filled in. You can change any field.';
         if (useGender) sync();
         return;
       }
-      if (loaded) {
-        setv(fields.name, '');
-        setv(fields.father, '');
-        setv(fields.contact, '');
-        setv(fields.district, '');
-        if (useGender && fields.gender) fields.gender.value = '';
-        if (source === 'bai') setv(pbiEl, '');
-        if (source === 'pbi') setv(baiEl, '');
-        loaded = null;
-        if (useGender) sync();
-      }
-      if (note && noteId !== 'player-id-note') note.textContent = '';
-      if (note && noteId === 'player-id-note') note.textContent = 'If this BAI ID or PBI ID was saved before, the other ID and the player details fill in. Change one ID and the other ID changes with it. Every field can be edited.';
+      unlockBlank(source);
     }
     function run(source) {
-      var typed = source === 'bai' ? (baiEl ? baiEl.value.trim() : '') : (pbiEl ? pbiEl.value.trim() : '');
+      var baiTyped = baiEl ? baiEl.value.trim() : '';
+      var pbiTyped = pbiEl ? pbiEl.value.trim() : '';
+      var typed = source === 'pbi' ? pbiTyped : (source === 'bai' ? baiTyped : (baiTyped || pbiTyped));
       var n = ++seq;
       if (!typed) { apply({found:false}, source); return; }
+      var sendBai = source === 'pbi' ? '' : baiTyped;
+      var sendPbi = source === 'bai' ? '' : pbiTyped;
       var url = 'join-lookup.php?t=' + encodeURIComponent(lookupToken)
-        + '&bai=' + encodeURIComponent(source === 'bai' ? typed : '')
-        + '&pbi=' + encodeURIComponent(source === 'pbi' ? typed : '');
+        + '&bai=' + encodeURIComponent(sendBai)
+        + '&pbi=' + encodeURIComponent(sendPbi);
       fetch(url).then(function(r){ return r.json(); }).then(function(data){
         if (n !== seq) return;
         apply(data, source);
       }).catch(function(){});
     }
+    function clearAll() {
+      seq++;
+      setv(baiEl, '');
+      setv(pbiEl, '');
+      setv(fields.name, '');
+      setv(fields.contact, '');
+      setv(fields.district, '');
+      lockGender(false, '');
+      if (useGender && fields.gender) fields.gender.value = '';
+      lockIdentity(false);
+      loaded = null;
+      showNote('');
+      if (useGender) sync();
+    }
     if (baiEl) {
-      baiEl.addEventListener('change', function(){ run('bai'); });
-      baiEl.addEventListener('blur', function(){ run('bai'); });
+      baiEl.addEventListener('change', function(){ if (!baiEl.readOnly) run('bai'); });
+      baiEl.addEventListener('blur', function(){ if (!baiEl.readOnly) run('bai'); });
     }
     if (pbiEl) {
-      pbiEl.addEventListener('change', function(){ run('pbi'); });
-      pbiEl.addEventListener('blur', function(){ run('pbi'); });
+      pbiEl.addEventListener('change', function(){ if (!pbiEl.readOnly) run('pbi'); });
+      pbiEl.addEventListener('blur', function(){ if (!pbiEl.readOnly) run('pbi'); });
     }
+    if (fields.clearBtn) fields.clearBtn.addEventListener('click', clearAll);
+    if ((baiEl && baiEl.value.trim()) || (pbiEl && pbiEl.value.trim())) run('both');
   }
   watchIds('bai_id', 'pbi_id', {
     name: document.getElementById('full_name'),
     gender: gender,
-    father: document.getElementById('father_name'),
     contact: document.getElementById('contact_mobile'),
-    district: document.getElementById('district')
+    district: document.getElementById('district'),
+    clearRow: document.getElementById('player-clear-row'),
+    clearBtn: document.getElementById('player-clear')
   }, 'player-id-note', true);
   watchIds('d_bai_id', 'd_pbi_id', {
     name: dName,
-    father: dFather,
     contact: dContact,
-    district: dDist
+    district: dDist,
+    clearRow: document.getElementById('d-clear-row'),
+    clearBtn: document.getElementById('d-clear')
   }, 'd-id-note', false);
   watchIds('m_bai_id', 'm_pbi_id', {
     name: mName,
-    father: mFather,
     contact: mContact,
-    district: mDist
+    district: mDist,
+    clearRow: document.getElementById('m-clear-row'),
+    clearBtn: document.getElementById('m-clear')
   }, 'm-id-note', false);
 })();
 </script>
