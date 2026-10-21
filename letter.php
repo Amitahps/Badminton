@@ -384,9 +384,6 @@ require __DIR__ . '/includes/header.php';
     <p><em>No teams selected for this letter. Use “Select teams” to tick teams for export.</em></p>
   <?php endif; ?>
 
-  <?php if ($forParents): ?>
-  <p>Players whose names are missing from this list can open the tournament entry link, tap <strong>Declined entries</strong> (top left), and correct the mismatched payment date, reference number or sender name.</p>
-  <?php endif; ?>
   <p>Thanking You</p>
   <p class="letter-sign"><?= bm_h($letterSign) ?></p>
 </article>
