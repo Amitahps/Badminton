@@ -168,7 +168,7 @@ if ($addressDisplay === '' && !empty($_POST['address'])) {
         </span>
       <?php endif; ?>
     </label>
-    <label class="span-2">Address<textarea name="address" rows="3"><?= bm_h($addressDisplay) ?></textarea></label>
+    <label class="span-2">District<textarea name="address" rows="3"><?= bm_h($addressDisplay) ?></textarea></label>
     <div class="form-actions span-2">
       <button type="submit" class="btn btn-primary"><?= $id ? 'Save player' : 'Save player' ?></button>
       <a class="btn" href="players.php">Cancel</a>
