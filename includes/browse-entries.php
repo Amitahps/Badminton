@@ -54,7 +54,8 @@ foreach ($grouped as $catName => $list) {
 }
 
 $parentOwnCode = trim((string)($parentOwnCode ?? ''));
-$renderConfirmedCells = static function (array $row, string $mode, string $token) use ($parentOwnCode): void {
+$parentPhoneList = !empty($parentPhoneList);
+$renderConfirmedCells = static function (array $row, string $mode, string $token) use ($parentOwnCode, $parentPhoneList): void {
     $isReceipts = $mode === 'receipts';
     $isDeclined = $mode === 'declined';
     $isUnpaid = $mode === 'unpaid';
@@ -80,13 +81,20 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
         echo '<td>' . bm_h(bm_rupees((int)($row['payment_amount'] ?? 0))) . '</td>';
         return;
     }
+    if ($parentPhoneList) {
+        echo '<td>' . bm_h(bm_parent_row_event_labels($row)) . '</td>';
+    }
     echo '<td>' . bm_h(bm_gender_label((string)($row['gender'] ?? ''))) . '</td>';
     echo '<td>' . bm_h((string)($row['bai_id'] ?? '')) . '</td>';
     echo '<td>' . bm_h((string)($row['pbi_id'] ?? '')) . '</td>';
-    echo '<td>' . bm_h((string)(($row['player_father'] ?? '') !== '' ? $row['player_father'] : ($row['father_name'] ?? ''))) . '</td>';
+    if (!$parentPhoneList) {
+        echo '<td>' . bm_h((string)(($row['player_father'] ?? '') !== '' ? $row['player_father'] : ($row['father_name'] ?? ''))) . '</td>';
+    }
     echo '<td>' . bm_h((string)(($row['mobile'] ?? '') !== '' ? $row['mobile'] : ($row['contact_mobile'] ?? ''))) . '</td>';
     echo '<td>' . bm_h((string)($row['address'] ?? '')) . '</td>';
-    echo '<td>' . bm_h(bm_parent_row_event_labels($row)) . '</td>';
+    if (!$parentPhoneList) {
+        echo '<td>' . bm_h(bm_parent_row_event_labels($row)) . '</td>';
+    }
     if ($isDeclined) {
         echo '<td>' . bm_h(bm_decline_reason_label((string)($row['decline_reason'] ?? ''))) . '</td>';
         echo '<td class="right no-print"><a class="btn btn-sm" href="parent-edit.php?id=' . (int)($row['id'] ?? 0) . '">Open</a></td>';
@@ -201,6 +209,15 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
         <?php if ($isUnpaid): ?>
         <th>Events</th>
         <th>Amount</th>
+        <?php elseif ($parentPhoneList): ?>
+        <th>Events</th>
+        <th>Gender</th>
+        <th>BAI ID</th>
+        <th>PBI ID</th>
+        <th>Contact</th>
+        <th>District</th>
+        <th>Payment</th>
+        <th class="no-print"></th>
         <?php else: ?>
         <th>Gender</th>
         <th>BAI ID</th>
@@ -248,6 +265,15 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
           <?php elseif ($isUnpaid): ?>
             <th>Events</th>
             <th>Amount</th>
+          <?php elseif ($parentPhoneList): ?>
+            <th>Events</th>
+            <th>Gender</th>
+            <th>BAI ID</th>
+            <th>PBI ID</th>
+            <th>Contact</th>
+            <th>District</th>
+            <th>Payment</th>
+            <th class="no-print"></th>
           <?php else: ?>
             <th>Gender</th>
             <th>BAI ID</th>

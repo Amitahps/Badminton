@@ -37,6 +37,7 @@ $parentOwnCode = $parentCode;
 $wrapClass = 'wrap-wide';
 $pageTitle = $tournament['name'] . ' · Confirmed entries';
 $browseHideTitle = true;
+$parentPhoneList = true;
 require __DIR__ . '/includes/header.php';
 ?>
 <section class="page-head">
