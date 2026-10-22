@@ -186,22 +186,17 @@ function bm_parent_find_or_create_player(PDO $pdo, array $data, string $who = 'P
 
     $existing = null;
     $matchedId = '';
-    foreach ([$bai, $pba] as $idValue) {
-        if ($idValue === '') {
-            continue;
-        }
-        $found = bm_player_by_registration_id($pdo, $idValue, 0);
-        if (!$found) {
-            continue;
-        }
-        if (!$existing) {
-            $existing = $found;
-            $matchedId = $idValue;
-            continue;
-        }
-        if ((int)$found['id'] !== (int)$existing['id']) {
-            throw new RuntimeException($idValue . ' already used by ' . (string)$found['full_name'] . '.');
-        }
+    $byBai = $bai !== '' ? bm_player_by_id_column($pdo, 'bai_id', $bai) : null;
+    $byPbi = $pba !== '' ? bm_player_by_id_column($pdo, 'pbi_id', $pba) : null;
+    if ($byBai && $byPbi && (int)$byBai['id'] !== (int)$byPbi['id']) {
+        throw new RuntimeException($pba . ' already used by ' . (string)$byPbi['full_name'] . '.');
+    }
+    if ($byBai) {
+        $existing = $byBai;
+        $matchedId = $bai;
+    } elseif ($byPbi) {
+        $existing = $byPbi;
+        $matchedId = $pba;
     }
 
     if ($existing) {
@@ -299,20 +294,12 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
     $ageKey = trim((string)($post['age_key'] ?? ''));
     $postedBai = trim((string)($post['bai_id'] ?? ''));
     $postedPbi = trim((string)($post['pbi_id'] ?? ''));
-    $known = null;
-    foreach ([$postedBai, $postedPbi] as $idValue) {
-        if ($idValue === '') {
-            continue;
-        }
-        $found = bm_player_by_registration_id($pdo, $idValue, 0);
-        if (!$found) {
-            continue;
-        }
-        if ($known && (int)$found['id'] !== (int)$known['id']) {
-            throw new RuntimeException($idValue . ' already used by ' . (string)$found['full_name'] . '.');
-        }
-        $known = $found;
+    $knownByBai = $postedBai !== '' ? bm_player_by_id_column($pdo, 'bai_id', $postedBai) : null;
+    $knownByPbi = $postedPbi !== '' ? bm_player_by_id_column($pdo, 'pbi_id', $postedPbi) : null;
+    if ($knownByBai && $knownByPbi && (int)$knownByBai['id'] !== (int)$knownByPbi['id']) {
+        throw new RuntimeException($postedPbi . ' already used by ' . (string)$knownByPbi['full_name'] . '.');
     }
+    $known = $knownByBai ?: $knownByPbi;
     $gender = $known
         ? strtolower((string)$known['gender'])
         : strtolower(trim((string)($post['gender'] ?? '')));
@@ -1785,8 +1772,8 @@ function bm_parent_lookup_details(PDO $pdo, string $bai, string $pbi): array
     if ($bai === '' && $pbi === '') {
         return ['found' => false];
     }
-    $byBai = $bai !== '' ? bm_player_by_registration_id($pdo, $bai, 0) : null;
-    $byPbi = $pbi !== '' ? bm_player_by_registration_id($pdo, $pbi, 0) : null;
+    $byBai = $bai !== '' ? bm_player_by_id_column($pdo, 'bai_id', $bai) : null;
+    $byPbi = $pbi !== '' ? bm_player_by_id_column($pdo, 'pbi_id', $pbi) : null;
     if ($byBai && $byPbi && (int)$byBai['id'] !== (int)$byPbi['id']) {
         return [
             'found' => false,

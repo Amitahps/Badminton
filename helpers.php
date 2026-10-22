@@ -352,6 +352,43 @@ function bm_player_by_registration_id(PDO $pdo, string $idValue, int $exceptPlay
 }
 
 /**
+ * Find a player by one ID column. A PBI lookup must not return a player
+ * whose BAI happens to be the same number.
+ */
+function bm_player_by_id_column(PDO $pdo, string $column, string $idValue, int $exceptPlayerId = 0): ?array
+{
+    $other = match ($column) {
+        'bai_id' => 'pbi_id',
+        'pbi_id' => 'bai_id',
+        default => '',
+    };
+    if ($other === '') {
+        throw new InvalidArgumentException('Unknown player id column.');
+    }
+    $idValue = trim($idValue);
+    if ($idValue === '') {
+        return null;
+    }
+    $st = $pdo->prepare("
+        SELECT * FROM players
+        WHERE id != ?
+          AND TRIM(IFNULL($column, '')) != ''
+          AND LOWER(TRIM($column)) = LOWER(?)
+        ORDER BY
+          CASE
+            WHEN TRIM(IFNULL($other, '')) != '' AND LOWER(TRIM($other)) != LOWER(?) THEN 0
+            WHEN TRIM(IFNULL($other, '')) != '' THEN 1
+            ELSE 2
+          END,
+          id
+        LIMIT 1
+    ");
+    $st->execute([$exceptPlayerId, $idValue, $idValue]);
+    $row = $st->fetch();
+    return $row ?: null;
+}
+
+/**
  * Reject a second player with the same BAI ID or PBI ID.
  * Blank IDs are allowed. Editing the same player keeps their own IDs.
  */
