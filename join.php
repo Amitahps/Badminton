@@ -72,7 +72,7 @@ require __DIR__ . '/includes/header.php';
     <p class="lede">Held at <strong><?= bm_h($tournament['held_at']) ?></strong> on <strong><?= bm_h($dateText) ?></strong>.</p>
   </div>
 </section>
-<?php bm_parent_choice_cards($token, $parentCode, $showForm ? 'new' : ''); ?>
+<?php bm_parent_choice_cards($token, $parentCode, $showForm ? 'new' : '', $showForm ? '' : bm_parent_mistake_pdf_html($token, $parentCode)); ?>
 <?php if (!$showForm): ?>
 <section class="panel">
   <p class="lede" style="max-width:none;"><?php if ($isPaid): ?>Choose <strong>New Entry</strong> to add a player, <strong>Confirmed Entries</strong> for names accepted by officials, or <strong>Declined Entries</strong> if payment, sender name, date or amount did not match and needs a correction.<?php else: ?>Choose <strong>New Entry</strong> to add a player, or <strong>Confirmed Entries</strong> for names accepted by officials.<?php endif; ?></p>

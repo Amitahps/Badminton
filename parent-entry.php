@@ -1810,7 +1810,19 @@ function bm_parent_lookup_details(PDO $pdo, string $bai, string $pbi): array
     ];
 }
 
-function bm_parent_choice_cards(string $token, string $parentCode = '', string $current = 'new'): void
+function bm_parent_mistake_pdf_html(string $token, string $parentCode = ''): string
+{
+    $minePdf = 'join-mine.php?t=' . rawurlencode($token);
+    if ($parentCode !== '') {
+        $minePdf .= '&p=' . rawurlencode($parentCode);
+    }
+    return '<div class="confirmed-mistake">'
+        . '<p class="lede">If an entry is made by mistake, it can be removed and entered again.</p>'
+        . '<p class="lede">Click <a href="' . bm_h($minePdf) . '">PDF</a> to view your entries and remove any incorrect entry.</p>'
+        . '</div>';
+}
+
+function bm_parent_choice_cards(string $token, string $parentCode = '', string $current = 'new', string $afterConfirmedHtml = ''): void
 {
     $t = rawurlencode($token);
     $p = $parentCode !== '' ? '&amp;p=' . rawurlencode($parentCode) : '';
@@ -1820,12 +1832,12 @@ function bm_parent_choice_cards(string $token, string $parentCode = '', string $
         'new' => [
             'href' => 'join.php?t=' . $t . '&amp;go=new',
             'title' => 'New Entry',
-            'note' => 'Add a new player for this tournament. Fill name, age category, events and payment details.',
+            'note' => 'Register a player with all required details.',
         ],
         'confirmed' => [
             'href' => 'join-confirmed.php?t=' . $t,
             'title' => 'Confirmed Entries',
-            'note' => $tournament ? bm_parent_confirmed_note($tournament) : bm_parent_confirmed_note(['is_paid' => 1]),
+            'note' => 'View the list of confirmed players.',
         ],
     ];
     if ($showDeclined) {
@@ -1842,13 +1854,16 @@ function bm_parent_choice_cards(string $token, string $parentCode = '', string $
         echo '<strong>' . bm_h($item['title']) . '</strong>';
         echo '<span>' . bm_h($item['note']) . '</span>';
         echo '</a>';
+        if ($key === 'confirmed' && $afterConfirmedHtml !== '') {
+            echo $afterConfirmedHtml;
+        }
     }
     echo '</div>';
 }
 
-function bm_parent_top_bar(string $token, string $parentCode = '', string $current = ''): void
+function bm_parent_top_bar(string $token, string $parentCode = '', string $current = '', string $afterConfirmedHtml = ''): void
 {
-    bm_parent_choice_cards($token, $parentCode, $current);
+    bm_parent_choice_cards($token, $parentCode, $current, $afterConfirmedHtml);
 }
 
 function bm_parent_event_bucket(string $code): ?string

@@ -196,6 +196,8 @@ a { color: var(--court-dark); }
 .cat-drop > summary { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
 .print-title { font-family: var(--display); font-size: 1.35rem; margin: 0 0 0.85rem; line-height: 1.35; }
 .choice-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; margin: 0 0 1.1rem; }
+.confirmed-mistake { display: flex; flex-direction: column; gap: 0.35rem; margin: -0.15rem 0 0.15rem; }
+.confirmed-mistake .lede a { font-weight: 700; }
 .choice-card {
   display: flex; flex-direction: column; gap: 0.35rem; text-decoration: none; color: inherit;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
