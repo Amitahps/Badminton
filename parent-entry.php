@@ -1804,7 +1804,6 @@ function bm_parent_mistake_pdf_html(string $token, string $parentCode = ''): str
         $minePdf .= '&p=' . rawurlencode($parentCode);
     }
     return '<div class="confirmed-mistake">'
-        . '<p class="lede">If an entry is made by mistake, it can be removed and entered again.</p>'
         . '<p class="lede">Click <a href="' . bm_h($minePdf) . '">PDF</a> to view your entries and remove any incorrect entry.</p>'
         . '</div>';
 }
