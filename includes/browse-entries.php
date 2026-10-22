@@ -57,11 +57,14 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
     $isReceipts = $mode === 'receipts';
     $isDeclined = $mode === 'declined';
     $isUnpaid = $mode === 'unpaid';
+    $eventCodes = array_filter(array_map('trim', explode(',', (string)($row['event_codes'] ?? ''))));
+    $showDouble = in_array('double_men', $eventCodes, true) || in_array('double_girls', $eventCodes, true);
+    $showMix = in_array('mix_double', $eventCodes, true);
     echo '<td><strong>' . bm_h((string)($row['full_name'] ?? '')) . '</strong>';
-    if (!$isReceipts && trim((string)($row['d_full_name'] ?? '')) !== '') {
+    if (!$isReceipts && $showDouble && trim((string)($row['d_full_name'] ?? '')) !== '') {
         echo '<div class="muted">Doubles: ' . bm_h((string)$row['d_full_name']) . '</div>';
     }
-    if (!$isReceipts && trim((string)($row['m_full_name'] ?? '')) !== '') {
+    if (!$isReceipts && $showMix && trim((string)($row['m_full_name'] ?? '')) !== '') {
         echo '<div class="muted">Mix: ' . bm_h((string)$row['m_full_name']) . '</div>';
     }
     echo '</td>';

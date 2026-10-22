@@ -637,7 +637,7 @@ function bm_team_members_still_entered(PDO $pdo, int $tournamentId, int $teamId,
 }
 
 /**
- * A removed entry must leave the letter and Excel too.
+ * A removed entry must leave the letter, Excel, and the confirmed list parents see.
  * Teams and parent submissions stay only for events still on the entry list.
  */
 function bm_drop_exports_for_removed_entries(PDO $pdo, int $tournamentId): void
@@ -658,7 +658,7 @@ function bm_drop_exports_for_removed_entries(PDO $pdo, int $tournamentId): void
     $subs = $pdo->prepare('SELECT * FROM parent_submissions WHERE tournament_id=?');
     $subs->execute([$tournamentId]);
     $delSub = $pdo->prepare('DELETE FROM parent_submissions WHERE id=?');
-    $updSub = $pdo->prepare('UPDATE parent_submissions SET event_codes=?, single_team_id=?, double_team_id=?, mix_team_id=? WHERE id=?');
+    $updSub = $pdo->prepare('UPDATE parent_submissions SET event_codes=?, single_team_id=?, double_team_id=?, mix_team_id=?, double_partner_id=?, mix_partner_id=? WHERE id=?');
     foreach ($subs->fetchAll() as $sub) {
         $catId = (int)$sub['age_category_id'];
         $primary = (int)$sub['primary_player_id'];
@@ -687,15 +687,29 @@ function bm_drop_exports_for_removed_entries(PDO $pdo, int $tournamentId): void
             $delSub->execute([$subId]);
             continue;
         }
+        $keepDouble = in_array('double_men', $live, true) || in_array('double_girls', $live, true);
+        $keepMix = in_array('mix_double', $live, true);
         $single = in_array('single', $live, true) ? ($sub['single_team_id'] ?? null) : null;
-        $double = (in_array('double_men', $live, true) || in_array('double_girls', $live, true)) ? ($sub['double_team_id'] ?? null) : null;
-        $mix = in_array('mix_double', $live, true) ? ($sub['mix_team_id'] ?? null) : null;
+        $double = $keepDouble ? ($sub['double_team_id'] ?? null) : null;
+        $mix = $keepMix ? ($sub['mix_team_id'] ?? null) : null;
+        $doublePartner = $keepDouble ? ($sub['double_partner_id'] ?? null) : null;
+        $mixPartner = $keepMix ? ($sub['mix_partner_id'] ?? null) : null;
         $newCodes = implode(',', $live);
         if ($newCodes !== (string)$sub['event_codes']
             || (string)$single !== (string)($sub['single_team_id'] ?? '')
             || (string)$double !== (string)($sub['double_team_id'] ?? '')
-            || (string)$mix !== (string)($sub['mix_team_id'] ?? '')) {
-            $updSub->execute([$newCodes, $single ?: null, $double ?: null, $mix ?: null, $subId]);
+            || (string)$mix !== (string)($sub['mix_team_id'] ?? '')
+            || (string)$doublePartner !== (string)($sub['double_partner_id'] ?? '')
+            || (string)$mixPartner !== (string)($sub['mix_partner_id'] ?? '')) {
+            $updSub->execute([
+                $newCodes,
+                $single ?: null,
+                $double ?: null,
+                $mix ?: null,
+                $doublePartner ?: null,
+                $mixPartner ?: null,
+                $subId,
+            ]);
         }
     }
 }
