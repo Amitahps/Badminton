@@ -377,7 +377,7 @@ function bm_player_by_id_column(PDO $pdo, string $column, string $idValue, int $
         ORDER BY
           CASE
             WHEN TRIM(IFNULL($other, '')) != '' AND LOWER(TRIM($other)) != LOWER(?) THEN 0
-            WHEN TRIM(IFNULL($other, '')) != '' THEN 1
+            WHEN TRIM(IFNULL($other, '')) = '' THEN 1
             ELSE 2
           END,
           id
