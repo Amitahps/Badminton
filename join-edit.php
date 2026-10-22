@@ -32,6 +32,16 @@ if (!$sub) {
 }
 $mine = 'join-mine.php?t=' . rawurlencode($token) . '&p=' . rawurlencode($code);
 
+if (isset($_POST['delete_parent'])) {
+    try {
+        bm_parent_delete_submission($pdo, $sub);
+        bm_flash('success', 'Your entry was removed.');
+    } catch (Throwable $e) {
+        bm_flash('error', $e->getMessage());
+    }
+    bm_redirect($mine);
+}
+
 if (isset($_POST['save_parent_edit'])) {
     try {
         $mobile = bm_normalize_mobile((string)($_POST['contact_mobile'] ?? ''));
@@ -174,6 +184,7 @@ require __DIR__ . '/includes/header.php';
     <?php endif; ?>
     <div class="form-actions span-2">
       <button type="submit" name="save_parent_edit" value="1" class="btn btn-primary">Save changes</button>
+      <button type="submit" name="delete_parent" value="1" class="btn" onclick="return confirm('Remove this entry? Only this entry from your phone is removed.');">Remove this entry</button>
     </div>
   </form>
 </section>

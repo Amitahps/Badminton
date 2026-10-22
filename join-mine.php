@@ -107,7 +107,14 @@ $blockPlayer = static function (string $title, array $pl): void {
            · Sender <?= bm_h((string)$row['payment_sender']) ?>
          <?php endif; ?>
       </p>
-      <p class="no-print"><a class="btn btn-sm" href="join-edit.php?t=<?= bm_h(urlencode($token)) ?>&amp;p=<?= bm_h(urlencode($code)) ?>&amp;r=<?= bm_h(urlencode((string)$row['receipt_code'])) ?>">Edit this entry</a></p>
+      <p class="no-print"><a class="btn btn-sm" href="join-edit.php?t=<?= bm_h(urlencode($token)) ?>&amp;p=<?= bm_h(urlencode($code)) ?>&amp;r=<?= bm_h(urlencode((string)$row['receipt_code'])) ?>">Edit this entry</a>
+        <form method="post" action="join-edit.php" class="inline" onsubmit="return confirm('Remove this entry? Only this entry from your phone is removed.');">
+          <input type="hidden" name="t" value="<?= bm_h($token) ?>">
+          <input type="hidden" name="p" value="<?= bm_h($code) ?>">
+          <input type="hidden" name="r" value="<?= bm_h((string)$row['receipt_code']) ?>">
+          <button type="submit" name="delete_parent" value="1" class="btn btn-sm">Remove this entry</button>
+        </form>
+      </p>
     </section>
     <?php $blockPlayer('Player', $row['primary'] ?: []); ?>
     <?php if ($row['double_partner']) {

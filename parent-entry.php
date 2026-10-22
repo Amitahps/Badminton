@@ -1416,7 +1416,7 @@ function bm_parent_list_for_browse(PDO $pdo, int $tournamentId, array $statuses,
     bm_drop_exports_for_removed_entries($pdo, $tournamentId);
     $in = implode(',', array_fill(0, count($statuses), '?'));
     $sql = "
-        SELECT s.id, s.receipt_code, s.event_codes, s.payment_status, s.payment_amount,
+        SELECT s.id, s.receipt_code, s.parent_code, s.event_codes, s.payment_status, s.payment_amount,
                s.payment_utr, s.payment_date, s.payment_sender, s.decline_reason, s.father_name, s.contact_mobile,
                c.id AS category_id, c.name AS category_name, c.sort_order,
                p.id AS player_id, p.full_name, p.gender, p.bai_id, p.pbi_id,

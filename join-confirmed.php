@@ -32,6 +32,7 @@ $filterAction = 'join-confirmed.php';
 $filterHidden = ['t' => $token, 'view' => $view];
 $receiptsUrl = 'join-receipts.php?t=' . rawurlencode($token);
 $parentCode = bm_own_parent_code($token);
+$parentOwnCode = $parentCode;
 
 $wrapClass = 'wrap-wide';
 $pageTitle = $tournament['name'] . ' · Confirmed entries';

@@ -53,7 +53,8 @@ foreach ($grouped as $catName => $list) {
     }
 }
 
-$renderConfirmedCells = static function (array $row, string $mode, string $token): void {
+$parentOwnCode = trim((string)($parentOwnCode ?? ''));
+$renderConfirmedCells = static function (array $row, string $mode, string $token) use ($parentOwnCode): void {
     $isReceipts = $mode === 'receipts';
     $isDeclined = $mode === 'declined';
     $isUnpaid = $mode === 'unpaid';
@@ -93,6 +94,18 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
     }
     echo '<td>' . bm_h(bm_parent_payment_label((string)($row['payment_status'] ?? ''), (int)($row['payment_amount'] ?? 0))) . '</td>';
     echo '<td class="right no-print">';
+    $own = strtolower($parentOwnCode);
+    $rowCode = strtolower(trim((string)($row['parent_code'] ?? '')));
+    if ($own !== '' && strlen($own) === strlen($rowCode) && hash_equals($own, $rowCode)) {
+        $editHref = 'join-edit.php?t=' . rawurlencode($token) . '&p=' . rawurlencode($parentOwnCode) . '&r=' . rawurlencode((string)($row['receipt_code'] ?? ''));
+        echo '<a class="btn btn-sm" href="' . bm_h($editHref) . '">Edit</a> ';
+        echo '<form method="post" action="join-edit.php" class="inline" onsubmit="return confirm(\'Remove this entry? Only this entry from your phone is removed.\');">';
+        echo '<input type="hidden" name="t" value="' . bm_h($token) . '">';
+        echo '<input type="hidden" name="p" value="' . bm_h($parentOwnCode) . '">';
+        echo '<input type="hidden" name="r" value="' . bm_h((string)($row['receipt_code'] ?? '')) . '">';
+        echo '<button type="submit" name="delete_parent" value="1" class="btn btn-sm">Remove</button>';
+        echo '</form> ';
+    }
     if ((string)($row['payment_status'] ?? '') === 'paid') {
         echo '<a class="btn btn-sm btn-primary" href="join-receipt.php?t=' . bm_h(urlencode($token)) . '&amp;r=' . bm_h(urlencode((string)$row['receipt_code'])) . '">Download receipt</a>';
     } else {
