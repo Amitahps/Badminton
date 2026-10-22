@@ -66,7 +66,7 @@ $blockPlayer = static function (string $title, array $pl): void {
   <div>
     <p class="eyebrow">Your entries only</p>
     <h1>Players you sent</h1>
-    <p class="lede"><?= count($rows) ?> player/age <?= count($rows) === 1 ? 'entry' : 'entries' ?> for this tournament. Print / Save as PDF. Use Edit if you made a mistake.</p>
+    <p class="lede"><?= count($rows) ?> player/age <?= count($rows) === 1 ? 'entry' : 'entries' ?> for this tournament. If an entry is made by mistake, it can be removed and entered again.</p>
   </div>
   <div class="page-actions">
     <button type="button" class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
@@ -107,14 +107,14 @@ $blockPlayer = static function (string $title, array $pl): void {
            · Sender <?= bm_h((string)$row['payment_sender']) ?>
          <?php endif; ?>
       </p>
-      <p class="no-print"><a class="btn btn-sm" href="join-edit.php?t=<?= bm_h(urlencode($token)) ?>&amp;p=<?= bm_h(urlencode($code)) ?>&amp;r=<?= bm_h(urlencode((string)$row['receipt_code'])) ?>">Edit this entry</a>
+      <div class="no-print">
         <form method="post" action="join-edit.php" class="inline" onsubmit="return confirm('Remove this entry? Only this entry from your phone is removed.');">
           <input type="hidden" name="t" value="<?= bm_h($token) ?>">
           <input type="hidden" name="p" value="<?= bm_h($code) ?>">
           <input type="hidden" name="r" value="<?= bm_h((string)$row['receipt_code']) ?>">
           <button type="submit" name="delete_parent" value="1" class="btn btn-sm">Remove this entry</button>
         </form>
-      </p>
+      </div>
     </section>
     <?php $blockPlayer('Player', $row['primary'] ?: []); ?>
     <?php if ($row['double_partner']) {
