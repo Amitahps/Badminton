@@ -1419,11 +1419,11 @@ function bm_parent_list_for_browse(PDO $pdo, int $tournamentId, array $statuses,
         SELECT s.id, s.receipt_code, s.event_codes, s.payment_status, s.payment_amount,
                s.payment_utr, s.payment_date, s.payment_sender, s.decline_reason, s.father_name, s.contact_mobile,
                c.id AS category_id, c.name AS category_name, c.sort_order,
-               p.full_name, p.gender, p.bai_id, p.pbi_id,
+               p.id AS player_id, p.full_name, p.gender, p.bai_id, p.pbi_id,
                p.father_name AS player_father, p.mobile, p.address,
-               dp.full_name AS d_full_name, dp.gender AS d_gender, dp.bai_id AS d_bai_id, dp.pbi_id AS d_pbi_id,
+               dp.id AS d_player_id, dp.full_name AS d_full_name, dp.gender AS d_gender, dp.bai_id AS d_bai_id, dp.pbi_id AS d_pbi_id,
                dp.father_name AS d_father_name, dp.mobile AS d_mobile, dp.address AS d_address,
-               mp.full_name AS m_full_name, mp.gender AS m_gender, mp.bai_id AS m_bai_id, mp.pbi_id AS m_pbi_id,
+               mp.id AS m_player_id, mp.full_name AS m_full_name, mp.gender AS m_gender, mp.bai_id AS m_bai_id, mp.pbi_id AS m_pbi_id,
                mp.father_name AS m_father_name, mp.mobile AS m_mobile, mp.address AS m_address
         FROM parent_submissions s
         JOIN age_categories c ON c.id = s.age_category_id
@@ -1448,6 +1448,90 @@ function bm_parent_list_for_browse(PDO $pdo, int $tournamentId, array $statuses,
     $st = $pdo->prepare($sql);
     $st->execute($params);
     return $st->fetchAll();
+}
+
+/**
+ * Parent phone confirmed list: only players who are still on a saved team.
+ *
+ * @param list<array<string,mixed>> $rows
+ * @return list<array<string,mixed>>
+ */
+function bm_parent_rows_on_saved_teams(PDO $pdo, int $tournamentId, array $rows): array
+{
+    $st = $pdo->prepare('
+        SELECT m.player_id, t.event_code, t.age_category_id
+        FROM tournament_team_members m
+        JOIN tournament_teams t ON t.id = m.team_id
+        WHERE t.tournament_id = ?
+    ');
+    $st->execute([$tournamentId]);
+    $byPlayer = [];
+    foreach ($st->fetchAll() as $r) {
+        $byPlayer[(int)$r['player_id']][] = [(string)$r['event_code'], (int)$r['age_category_id']];
+    }
+    $pairedCache = [];
+    $matches = static function (int $teamCatId, int $subCatId, string $event) use ($pdo, &$pairedCache): bool {
+        if ($event !== 'mix_double') {
+            return $teamCatId === $subCatId;
+        }
+        if ($teamCatId === $subCatId) {
+            return true;
+        }
+        if (!isset($pairedCache[$subCatId])) {
+            $catSt = $pdo->prepare('SELECT * FROM age_categories WHERE id=?');
+            $catSt->execute([$subCatId]);
+            $cat = $catSt->fetch();
+            $pairedCache[$subCatId] = $cat ? bm_paired_category_ids($pdo, $cat) : [$subCatId];
+        }
+        return in_array($teamCatId, $pairedCache[$subCatId], true);
+    };
+    $out = [];
+    foreach ($rows as $row) {
+        $pid = (int)($row['player_id'] ?? 0);
+        $catId = (int)($row['category_id'] ?? 0);
+        $slots = $byPlayer[$pid] ?? [];
+        if ($pid <= 0 || $slots === []) {
+            continue;
+        }
+        $live = [];
+        foreach (explode(',', (string)($row['event_codes'] ?? '')) as $code) {
+            $code = trim($code);
+            if ($code === '') {
+                continue;
+            }
+            foreach ($slots as [$ev, $teamCatId]) {
+                if ($ev === $code && $matches($teamCatId, $catId, $code)) {
+                    $live[] = $code;
+                    break;
+                }
+            }
+        }
+        if ($live === []) {
+            continue;
+        }
+        $row['event_codes'] = implode(',', $live);
+        $partnerSaved = static function (int $partnerId, array $codes) use ($byPlayer, $catId, $matches): bool {
+            if ($partnerId <= 0) {
+                return false;
+            }
+            foreach ($byPlayer[$partnerId] ?? [] as [$ev, $teamCatId]) {
+                if (in_array($ev, $codes, true) && $matches($teamCatId, $catId, $ev)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        $doubleCodes = array_values(array_intersect($live, ['double_men', 'double_girls']));
+        $mixCodes = array_values(array_intersect($live, ['mix_double']));
+        if (!$partnerSaved((int)($row['d_player_id'] ?? 0), $doubleCodes)) {
+            $row['d_full_name'] = '';
+        }
+        if (!$partnerSaved((int)($row['m_player_id'] ?? 0), $mixCodes)) {
+            $row['m_full_name'] = '';
+        }
+        $out[] = $row;
+    }
+    return $out;
 }
 
 /**

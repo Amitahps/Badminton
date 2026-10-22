@@ -19,7 +19,11 @@ $view = trim((string)($_GET['view'] ?? 'category'));
 if (!in_array($view, ['all', 'category'], true)) {
     $view = 'category';
 }
-$rows = bm_parent_list_for_browse($pdo, (int)$tournament['id'], ['paid', 'pending', 'na'], $q);
+$rows = bm_parent_rows_on_saved_teams(
+    $pdo,
+    (int)$tournament['id'],
+    bm_parent_list_for_browse($pdo, (int)$tournament['id'], ['paid', 'pending', 'na'], $q)
+);
 $allowExport = false;
 $browseLede = bm_parent_confirmed_note($tournament);
 $grouped = bm_parent_group_by_category($rows);
