@@ -115,6 +115,7 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
 };
 ?>
 <section class="page-head">
+  <?php if (empty($browseHideTitle)): ?>
   <div>
     <h1><?= bm_h((string)($tournament['name'] ?? 'Tournament')) ?></h1>
     <p class="lede"><?php if (!empty($browseLede)): ?>
@@ -129,6 +130,7 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
       List of entries accepted by officials. Download a receipt only after online payment is confirmed. Copy of receipt is mandatory on the day of tournament.
     <?php endif; ?></p>
   </div>
+  <?php endif; ?>
   <?php if (!$isReceipts && $total > 0): ?>
   <div class="page-actions no-print">
     <a class="btn <?= $view === 'all' ? 'btn-primary' : '' ?>" href="<?= bm_h($viewAllUrl) ?>">Show all</a>

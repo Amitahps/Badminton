@@ -36,7 +36,17 @@ $parentOwnCode = $parentCode;
 
 $wrapClass = 'wrap-wide';
 $pageTitle = $tournament['name'] . ' · Confirmed entries';
+$minePdf = 'join-mine.php?t=' . rawurlencode($token) . ($parentCode !== '' ? '&p=' . rawurlencode($parentCode) : '');
+$browseHideTitle = true;
 require __DIR__ . '/includes/header.php';
+?>
+<section class="page-head">
+  <div>
+    <h1><?= bm_h((string)$tournament['name']) ?></h1>
+    <p class="lede">If any entry is done by mistake, click <a href="<?= bm_h($minePdf) ?>">PDF</a> to view all entries. Remove any incorrect entry and re-enter it.</p>
+  </div>
+</section>
+<?php
 bm_parent_top_bar($token, $parentCode, 'confirmed');
 require __DIR__ . '/includes/browse-entries.php';
 require __DIR__ . '/includes/footer.php';
