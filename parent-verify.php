@@ -81,6 +81,7 @@ if ($tid <= 0) {
     exit;
 }
 bm_remember_tournament_id($tid);
+bm_drop_exports_for_removed_entries($pdo, $tid);
 $sql .= ' AND s.tournament_id = ?';
 $params[] = $tid;
 if ($cid > 0) {

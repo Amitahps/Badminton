@@ -99,6 +99,7 @@ if ($letterBody === '') {
 }
 $letterGreeting = $forParents ? 'Dear Parents and Coaches,' : 'Sir/Madam,';
 $letterFields = bm_letter_fields_enabled($tournament['letter_columns'] ?? null);
+bm_drop_exports_for_removed_entries($pdo, $id);
 $parentMeta = bm_tournament_parent_meta_by_player($pdo, $id);
 
 // Only teams ticked for letter

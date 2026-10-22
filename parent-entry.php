@@ -1413,6 +1413,7 @@ function bm_parent_list_for_browse(PDO $pdo, int $tournamentId, array $statuses,
     if ($statuses === []) {
         return [];
     }
+    bm_drop_exports_for_removed_entries($pdo, $tournamentId);
     $in = implode(',', array_fill(0, count($statuses), '?'));
     $sql = "
         SELECT s.id, s.receipt_code, s.event_codes, s.payment_status, s.payment_amount,

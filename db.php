@@ -567,6 +567,7 @@ function bm_set_tournament_player_entries(PDO $pdo, int $tournamentId, int $play
         }
     }
     if (!$cats) {
+        bm_drop_exports_for_removed_entries($pdo, $tournamentId);
         return;
     }
     $in = implode(',', array_fill(0, count($cats), '?'));
@@ -588,12 +589,115 @@ function bm_set_tournament_player_entries(PDO $pdo, int $tournamentId, int $play
             $seen[$code] = true;
         }
     }
+    bm_drop_exports_for_removed_entries($pdo, $tournamentId);
 }
 
 function bm_clear_tournament_player_entries(PDO $pdo, int $tournamentId, int $playerId): void
 {
     $pdo->prepare('DELETE FROM tournament_entries WHERE tournament_id=? AND player_id=?')
         ->execute([$tournamentId, $playerId]);
+    bm_drop_exports_for_removed_entries($pdo, $tournamentId);
+}
+
+/** True when this player still has the event on the tournament entry list. Mix checks both paired age categories. */
+function bm_player_on_event(PDO $pdo, int $tournamentId, int $playerId, int $categoryId, string $eventCode): bool
+{
+    if ($playerId <= 0 || $categoryId <= 0 || $eventCode === '') {
+        return false;
+    }
+    if ($eventCode === 'mix_double') {
+        $st = $pdo->prepare('SELECT * FROM age_categories WHERE id=?');
+        $st->execute([$categoryId]);
+        $cat = $st->fetch();
+        $ids = $cat ? bm_paired_category_ids($pdo, $cat) : [$categoryId];
+        foreach ($ids as $cid) {
+            if (bm_tournament_has_entry($pdo, $tournamentId, $playerId, (int)$cid, $eventCode)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return bm_tournament_has_entry($pdo, $tournamentId, $playerId, $categoryId, $eventCode);
+}
+
+function bm_team_members_still_entered(PDO $pdo, int $tournamentId, int $teamId, int $categoryId, string $eventCode): bool
+{
+    $ms = $pdo->prepare('SELECT player_id FROM tournament_team_members WHERE team_id=?');
+    $ms->execute([$teamId]);
+    $ids = array_map('intval', array_column($ms->fetchAll(), 'player_id'));
+    if ($ids === []) {
+        return false;
+    }
+    foreach ($ids as $pid) {
+        if (!bm_player_on_event($pdo, $tournamentId, $pid, $categoryId, $eventCode)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * A removed entry must leave the letter and Excel too.
+ * Teams and parent submissions stay only for events still on the entry list.
+ */
+function bm_drop_exports_for_removed_entries(PDO $pdo, int $tournamentId): void
+{
+    if ($tournamentId <= 0) {
+        return;
+    }
+    $teams = $pdo->prepare('SELECT id, age_category_id, event_code FROM tournament_teams WHERE tournament_id=?');
+    $teams->execute([$tournamentId]);
+    $delTeam = $pdo->prepare('DELETE FROM tournament_teams WHERE id=? AND tournament_id=?');
+    foreach ($teams->fetchAll() as $team) {
+        $teamId = (int)$team['id'];
+        if (!bm_team_members_still_entered($pdo, $tournamentId, $teamId, (int)$team['age_category_id'], (string)$team['event_code'])) {
+            $delTeam->execute([$teamId, $tournamentId]);
+        }
+    }
+
+    $subs = $pdo->prepare('SELECT * FROM parent_submissions WHERE tournament_id=?');
+    $subs->execute([$tournamentId]);
+    $delSub = $pdo->prepare('DELETE FROM parent_submissions WHERE id=?');
+    $updSub = $pdo->prepare('UPDATE parent_submissions SET event_codes=?, single_team_id=?, double_team_id=?, mix_team_id=? WHERE id=?');
+    foreach ($subs->fetchAll() as $sub) {
+        $catId = (int)$sub['age_category_id'];
+        $primary = (int)$sub['primary_player_id'];
+        $live = [];
+        foreach (explode(',', (string)($sub['event_codes'] ?? '')) as $code) {
+            $code = trim($code);
+            if ($code === '' || !bm_player_on_event($pdo, $tournamentId, $primary, $catId, $code)) {
+                continue;
+            }
+            if (($code === 'double_men' || $code === 'double_girls')) {
+                $partner = (int)($sub['double_partner_id'] ?? 0);
+                if ($partner > 0 && !bm_player_on_event($pdo, $tournamentId, $partner, $catId, $code)) {
+                    continue;
+                }
+            }
+            if ($code === 'mix_double') {
+                $partner = (int)($sub['mix_partner_id'] ?? 0);
+                if ($partner > 0 && !bm_player_on_event($pdo, $tournamentId, $partner, $catId, $code)) {
+                    continue;
+                }
+            }
+            $live[] = $code;
+        }
+        $subId = (int)$sub['id'];
+        if ($live === []) {
+            $delSub->execute([$subId]);
+            continue;
+        }
+        $single = in_array('single', $live, true) ? ($sub['single_team_id'] ?? null) : null;
+        $double = (in_array('double_men', $live, true) || in_array('double_girls', $live, true)) ? ($sub['double_team_id'] ?? null) : null;
+        $mix = in_array('mix_double', $live, true) ? ($sub['mix_team_id'] ?? null) : null;
+        $newCodes = implode(',', $live);
+        if ($newCodes !== (string)$sub['event_codes']
+            || (string)$single !== (string)($sub['single_team_id'] ?? '')
+            || (string)$double !== (string)($sub['double_team_id'] ?? '')
+            || (string)$mix !== (string)($sub['mix_team_id'] ?? '')) {
+            $updSub->execute([$newCodes, $single ?: null, $double ?: null, $mix ?: null, $subId]);
+        }
+    }
 }
 
 /** @deprecated Global player events — kept for old data only. Use tournament_entries. */

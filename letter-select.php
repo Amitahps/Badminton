@@ -45,6 +45,8 @@ if (isset($_POST['save_selection']) || isset($_POST['save_and_open']) || isset($
     bm_redirect('letter-select.php?tournament_id=' . $id);
 }
 
+bm_drop_exports_for_removed_entries($pdo, $id);
+
 // Load teams with members, grouped for display
 $rows = $pdo->prepare("
     SELECT t.*,
