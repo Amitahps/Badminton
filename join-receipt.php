@@ -59,7 +59,7 @@ $blockPlayer = static function (string $title, array $pl): void {
     echo '<tr><th>Name</th><td>' . bm_h((string)($pl['full_name'] ?? '')) . '</td></tr>';
     echo '<tr><th>Gender</th><td>' . bm_h(bm_gender_label((string)($pl['gender'] ?? ''))) . '</td></tr>';
     echo '<tr><th>BAI ID</th><td>' . bm_h(trim((string)($pl['bai_id'] ?? '')) !== '' ? (string)$pl['bai_id'] : '—') . '</td></tr>';
-    echo '<tr><th>PBI ID</th><td>' . bm_h(trim((string)($pl['pbi_id'] ?? '')) !== '' ? (string)$pl['pbi_id'] : '—') . '</td></tr>';
+    echo '<tr><th>PBA ID</th><td>' . bm_h(trim((string)($pl['pbi_id'] ?? '')) !== '' ? (string)$pl['pbi_id'] : '—') . '</td></tr>';
     echo '<tr><th>Father’s name</th><td>' . bm_h(trim((string)($pl['father_name'] ?? '')) !== '' ? (string)$pl['father_name'] : '—') . '</td></tr>';
     echo '<tr><th>Contact</th><td>' . bm_h(trim((string)($pl['mobile'] ?? '')) !== '' ? (string)$pl['mobile'] : '—') . '</td></tr>';
     $addr = bm_player_address($pl);

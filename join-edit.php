@@ -144,14 +144,14 @@ require __DIR__ . '/includes/header.php';
     <label>Player name<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($p['full_name'] ?? '')) ?>"></label>
     <label>Gender<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h(bm_gender_label((string)($p['gender'] ?? ''))) ?>"></label>
     <label>BAI ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($p['bai_id'] ?? '')) ?>"></label>
-    <label>PBI ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($p['pbi_id'] ?? '')) ?>"></label>
+    <label>PBA ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($p['pbi_id'] ?? '')) ?>"></label>
     <label>Contact<input type="tel" name="contact_mobile" required maxlength="15" value="<?= bm_h((string)($p['mobile'] ?? $sub['contact_mobile'] ?? '')) ?>"></label>
     <label class="span-2">District<input type="text" name="district" required maxlength="120" value="<?= bm_h(bm_player_address($p)) ?>"></label>
     <?php if ($d): ?>
     <p class="hint span-2">Doubles partner</p>
     <label>Partner name<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($d['full_name'] ?? '')) ?>"></label>
     <label>Partner BAI ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($d['bai_id'] ?? '')) ?>"></label>
-    <label>Partner PBI ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($d['pbi_id'] ?? '')) ?>"></label>
+    <label>Partner PBA ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($d['pbi_id'] ?? '')) ?>"></label>
     <label>Partner contact<input type="tel" name="d_contact_mobile" required maxlength="15" value="<?= bm_h((string)($d['mobile'] ?? '')) ?>"></label>
     <label class="span-2">Partner district<input type="text" name="d_district" required maxlength="120" value="<?= bm_h(bm_player_address($d)) ?>"></label>
     <?php endif; ?>
@@ -159,7 +159,7 @@ require __DIR__ . '/includes/header.php';
     <p class="hint span-2">Mix Double partner</p>
     <label>Partner name<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($m['full_name'] ?? '')) ?>"></label>
     <label>Partner BAI ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($m['bai_id'] ?? '')) ?>"></label>
-    <label>Partner PBI ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($m['pbi_id'] ?? '')) ?>"></label>
+    <label>Partner PBA ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($m['pbi_id'] ?? '')) ?>"></label>
     <label>Partner contact<input type="tel" name="m_contact_mobile" required maxlength="15" value="<?= bm_h((string)($m['mobile'] ?? '')) ?>"></label>
     <label class="span-2">Partner district<input type="text" name="m_district" required maxlength="120" value="<?= bm_h(bm_player_address($m)) ?>"></label>
     <?php endif; ?>

@@ -162,7 +162,7 @@ function bm_parent_resolve_category(PDO $pdo, string $ageKey, string $gender, in
 }
 
 /**
- * A saved BAI ID or PBI ID stays with that player. Another player cannot take it.
+ * A saved BAI ID or PBA ID stays with that player. Another player cannot take it.
  * Parents may update only contact and district on a saved player.
  * An ID that is not saved yet creates a new player. Father’s name is not collected here.
  *
@@ -1674,7 +1674,7 @@ function bm_parent_output_browse_csv(array $tournament, array $rows, string $lab
     }
     fwrite($out, "\xEF\xBB\xBF");
     fputcsv($out, [(string)($tournament['name'] ?? 'Tournament'), $isDeclined ? 'Declined entries' : 'Confirmed entries']);
-    $head = ['Category', 'Player', 'Gender', 'BAI ID', 'PBI ID', 'Father', 'Contact', 'District', 'Events'];
+    $head = ['Category', 'Player', 'Gender', 'BAI ID', 'PBA ID', 'Father', 'Contact', 'District', 'Events'];
     if ($isDeclined) {
         $head = array_merge($head, ['Mismatch', 'Date', 'UTR', 'Sender', 'Amount', 'Doubles partner', 'Mix partner']);
     } else {
@@ -2000,7 +2000,7 @@ function bm_parent_load_by_id(PDO $pdo, int $id, int $tournamentId = 0): ?array
     return bm_parent_load_receipt($pdo, (string)$row['receipt_code'], (int)$row['tournament_id']);
 }
 
-/** Parent edit: contact and district only. Name, gender, BAI ID and PBI ID stay as saved. */
+/** Parent edit: contact and district only. Name, gender, BAI ID and PBA ID stay as saved. */
 function bm_parent_update_player_contact(PDO $pdo, int $playerId, string $mobile, string $address, string $who): array
 {
     $st = $pdo->prepare('SELECT * FROM players WHERE id=?');

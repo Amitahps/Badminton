@@ -109,7 +109,7 @@ $st = $pdo->prepare($sql);
 $st->execute($params);
 $rows = $st->fetchAll();
 
-$head = ['Tournament', 'Category', 'Player', 'Gender', 'BAI ID', 'PBI ID', 'Father', 'Contact', 'District', 'Events', 'Amount', 'Payment', 'UTR', 'Doubles partner', 'Partner father', 'Partner contact', 'Partner district', 'Mix partner', 'Mix father', 'Mix contact', 'Mix district'];
+$head = ['Tournament', 'Category', 'Player', 'Gender', 'BAI ID', 'PBA ID', 'Father', 'Contact', 'District', 'Events', 'Amount', 'Payment', 'UTR', 'Doubles partner', 'Partner father', 'Partner contact', 'Partner district', 'Mix partner', 'Mix father', 'Mix contact', 'Mix district'];
 
 if ($fmt === 'csv') {
     header('Content-Type: text/csv; charset=utf-8');

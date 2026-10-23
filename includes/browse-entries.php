@@ -213,7 +213,7 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
         <th>Events</th>
         <th>Gender</th>
         <th>BAI ID</th>
-        <th>PBI ID</th>
+        <th>PBA ID</th>
         <th>Contact</th>
         <th>District</th>
         <th>Payment</th>
@@ -221,7 +221,7 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
         <?php else: ?>
         <th>Gender</th>
         <th>BAI ID</th>
-        <th>PBI ID</th>
+        <th>PBA ID</th>
         <th>Father</th>
         <th>Contact</th>
         <th>District</th>
@@ -269,7 +269,7 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
             <th>Events</th>
             <th>Gender</th>
             <th>BAI ID</th>
-            <th>PBI ID</th>
+            <th>PBA ID</th>
             <th>Contact</th>
             <th>District</th>
             <th>Payment</th>
@@ -277,7 +277,7 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
           <?php else: ?>
             <th>Gender</th>
             <th>BAI ID</th>
-            <th>PBI ID</th>
+            <th>PBA ID</th>
             <th>Father</th>
             <th>Contact</th>
             <th>District</th>

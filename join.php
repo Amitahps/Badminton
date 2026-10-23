@@ -104,7 +104,7 @@ require __DIR__ . '/includes/header.php';
     </label>
 
     <label>BAI ID<input type="text" name="bai_id" id="bai_id" maxlength="80" value="<?= bm_h($form['bai_id']) ?>"></label>
-    <label>PBI ID<input type="text" name="pbi_id" id="pbi_id" maxlength="80" value="<?= bm_h($form['pbi_id']) ?>"></label>
+    <label>PBA ID<input type="text" name="pbi_id" id="pbi_id" maxlength="80" value="<?= bm_h($form['pbi_id']) ?>"></label>
     <p class="hint span-2" id="player-id-note" hidden></p>
     <div class="id-clear" id="player-clear-row" hidden>
       <button type="button" class="btn" id="player-clear">Clear</button>
@@ -149,7 +149,7 @@ require __DIR__ . '/includes/header.php';
       <h2>Doubles partner</h2>
       <p class="hint">Required because Doubles is selected. Same gender as the player.</p>
       <label>Partner BAI ID<input type="text" name="d_bai_id" id="d_bai_id" maxlength="80" value="<?= bm_h($form['d_bai_id']) ?>"></label>
-      <label>Partner PBI ID<input type="text" name="d_pbi_id" id="d_pbi_id" maxlength="80" value="<?= bm_h($form['d_pbi_id']) ?>"></label>
+      <label>Partner PBA ID<input type="text" name="d_pbi_id" id="d_pbi_id" maxlength="80" value="<?= bm_h($form['d_pbi_id']) ?>"></label>
       <p class="hint span-2" id="d-id-note" hidden></p>
       <div class="id-clear" id="d-clear-row" hidden>
         <button type="button" class="btn" id="d-clear">Clear</button>
@@ -164,7 +164,7 @@ require __DIR__ . '/includes/header.php';
       <h2>Mix Double partner</h2>
       <p class="hint">Required because Mix Double is selected. Opposite gender (boy + girl).</p>
       <label>Partner BAI ID<input type="text" name="m_bai_id" id="m_bai_id" maxlength="80" value="<?= bm_h($form['m_bai_id']) ?>"></label>
-      <label>Partner PBI ID<input type="text" name="m_pbi_id" id="m_pbi_id" maxlength="80" value="<?= bm_h($form['m_pbi_id']) ?>"></label>
+      <label>Partner PBA ID<input type="text" name="m_pbi_id" id="m_pbi_id" maxlength="80" value="<?= bm_h($form['m_pbi_id']) ?>"></label>
       <p class="hint span-2" id="m-id-note" hidden></p>
       <div class="id-clear" id="m-clear-row" hidden>
         <button type="button" class="btn" id="m-clear">Clear</button>

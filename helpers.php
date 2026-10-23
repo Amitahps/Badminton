@@ -325,7 +325,7 @@ function bm_player_names_match(string $a, string $b): bool
 }
 
 /**
- * A BAI ID or PBI ID belongs to one player. The same number cannot be reused
+ * A BAI ID or PBA ID belongs to one player. The same number cannot be reused
  * as either ID by someone else. Blank IDs are allowed. Father name, contact
  * and address may be shared.
  *
@@ -352,7 +352,7 @@ function bm_player_by_registration_id(PDO $pdo, string $idValue, int $exceptPlay
 }
 
 /**
- * Find a player by one ID column. A PBI lookup must not return a player
+ * Find a player by one ID column. A PBA lookup must not return a player
  * whose BAI happens to be the same number.
  */
 function bm_player_by_id_column(PDO $pdo, string $column, string $idValue, int $exceptPlayerId = 0): ?array
@@ -389,7 +389,7 @@ function bm_player_by_id_column(PDO $pdo, string $column, string $idValue, int $
 }
 
 /**
- * Reject a second player with the same BAI ID or PBI ID.
+ * Reject a second player with the same BAI ID or PBA ID.
  * Blank IDs are allowed. Editing the same player keeps their own IDs.
  */
 function bm_assert_unique_player_ids(PDO $pdo, ?string $bai, ?string $pba, int $exceptPlayerId = 0): void
