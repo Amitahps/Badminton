@@ -92,8 +92,9 @@ $blockPlayer = static function (string $title, array $pl): void {
     ?>
     <section class="letter-category">
       <h2>Entry <?= $i + 1 ?> — <?= bm_h((string)($cat['name'] ?? 'Age')) ?></h2>
-      <p><strong>Events:</strong> <?= bm_h(implode(', ', $eventLabels)) ?><br>
-         <strong>Payment:</strong> <?= bm_h(bm_parent_payment_label((string)($row['payment_status'] ?? ''), (int)($row['payment_amount'] ?? 0))) ?>
+      <p><strong>Events:</strong> <?= bm_h(implode(', ', $eventLabels)) ?>
+         <?php if (bm_tournament_is_paid($tournament)): ?>
+         <br><strong>Payment:</strong> <?= bm_h(bm_parent_payment_label((string)($row['payment_status'] ?? ''), (int)($row['payment_amount'] ?? 0))) ?>
          <?php if ((string)($row['payment_status'] ?? '') === 'declined'): ?>
            · <?= bm_h(bm_decline_reason_label((string)($row['decline_reason'] ?? ''))) ?>
          <?php endif; ?>
@@ -105,6 +106,7 @@ $blockPlayer = static function (string $title, array $pl): void {
          <?php endif; ?>
          <?php if (trim((string)($row['payment_sender'] ?? '')) !== ''): ?>
            · Sender <?= bm_h((string)$row['payment_sender']) ?>
+         <?php endif; ?>
          <?php endif; ?>
       </p>
       <div class="no-print">

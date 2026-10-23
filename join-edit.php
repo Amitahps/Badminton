@@ -163,7 +163,7 @@ require __DIR__ . '/includes/header.php';
     <label>Partner contact<input type="tel" name="m_contact_mobile" required maxlength="15" value="<?= bm_h((string)($m['mobile'] ?? '')) ?>"></label>
     <label class="span-2">Partner district<input type="text" name="m_district" required maxlength="120" value="<?= bm_h(bm_player_address($m)) ?>"></label>
     <?php endif; ?>
-    <?php if ($canFixPay): ?>
+    <?php if ($canFixPay && bm_tournament_is_paid($tournament)): ?>
     <p class="hint span-2">Payment — date, reference no / UTR, sender name</p>
     <label>Date of payment (dd-mm-yyyy)
       <input type="text" name="payment_date" required maxlength="10" placeholder="dd-mm-yyyy" value="<?php
@@ -188,7 +188,7 @@ require __DIR__ . '/includes/header.php';
     </div>
   </form>
 </section>
-<?php if ($canFixPay): ?>
+<?php if ($canFixPay && bm_tournament_is_paid($tournament)): ?>
 <script>
 (function(){
   var utr = document.getElementById('payment_utr');

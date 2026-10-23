@@ -55,7 +55,8 @@ foreach ($grouped as $catName => $list) {
 
 $parentOwnCode = trim((string)($parentOwnCode ?? ''));
 $parentPhoneList = !empty($parentPhoneList);
-$renderConfirmedCells = static function (array $row, string $mode, string $token) use ($parentOwnCode, $parentPhoneList): void {
+$hideParentPayment = $parentPhoneList && !bm_tournament_is_paid($tournament);
+$renderConfirmedCells = static function (array $row, string $mode, string $token) use ($parentOwnCode, $parentPhoneList, $hideParentPayment): void {
     $isReceipts = $mode === 'receipts';
     $isDeclined = $mode === 'declined';
     $isUnpaid = $mode === 'unpaid';
@@ -100,7 +101,9 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
         echo '<td class="right no-print"><a class="btn btn-sm" href="parent-edit.php?id=' . (int)($row['id'] ?? 0) . '">Open</a></td>';
         return;
     }
-    echo '<td>' . bm_h(bm_parent_payment_label((string)($row['payment_status'] ?? ''), (int)($row['payment_amount'] ?? 0))) . '</td>';
+    if (!$hideParentPayment) {
+        echo '<td>' . bm_h(bm_parent_payment_label((string)($row['payment_status'] ?? ''), (int)($row['payment_amount'] ?? 0))) . '</td>';
+    }
     echo '<td class="right no-print">';
     $own = strtolower($parentOwnCode);
     $rowCode = strtolower(trim((string)($row['parent_code'] ?? '')));
@@ -114,10 +117,12 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
         echo '<button type="submit" name="delete_parent" value="1" class="btn btn-sm">Remove</button>';
         echo '</form> ';
     }
-    if ((string)($row['payment_status'] ?? '') === 'paid') {
-        echo '<a class="btn btn-sm btn-primary" href="join-receipt.php?t=' . bm_h(urlencode($token)) . '&amp;r=' . bm_h(urlencode((string)$row['receipt_code'])) . '">Download receipt</a>';
-    } else {
-        echo '<span class="muted">Receipt after paid</span>';
+    if (!$hideParentPayment) {
+        if ((string)($row['payment_status'] ?? '') === 'paid') {
+            echo '<a class="btn btn-sm btn-primary" href="join-receipt.php?t=' . bm_h(urlencode($token)) . '&amp;r=' . bm_h(urlencode((string)$row['receipt_code'])) . '">Download receipt</a>';
+        } else {
+            echo '<span class="muted">Receipt after paid</span>';
+        }
     }
     echo '</td>';
 };
@@ -216,7 +221,7 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
         <th>PBA ID</th>
         <th>Contact</th>
         <th>District</th>
-        <th>Payment</th>
+        <?php if (!$hideParentPayment): ?><th>Payment</th><?php endif; ?>
         <th class="no-print"></th>
         <?php else: ?>
         <th>Gender</th>
@@ -272,7 +277,7 @@ $renderConfirmedCells = static function (array $row, string $mode, string $token
             <th>PBA ID</th>
             <th>Contact</th>
             <th>District</th>
-            <th>Payment</th>
+            <?php if (!$hideParentPayment): ?><th>Payment</th><?php endif; ?>
             <th class="no-print"></th>
           <?php else: ?>
             <th>Gender</th>
