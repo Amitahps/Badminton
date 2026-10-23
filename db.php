@@ -407,6 +407,12 @@ function bm_migrate_schema(PDO $pdo): void
         if (!bm_column_exists($pdo, 'players', 'father_name')) {
             $pdo->exec('ALTER TABLE players ADD COLUMN father_name TEXT');
         }
+        if (!bm_column_exists($pdo, 'players', 'created_parent_code')) {
+            $pdo->exec('ALTER TABLE players ADD COLUMN created_parent_code TEXT');
+        }
+        if (!bm_column_exists($pdo, 'players', 'identity_locked')) {
+            $pdo->exec('ALTER TABLE players ADD COLUMN identity_locked INTEGER NOT NULL DEFAULT 1');
+        }
         if (bm_column_exists($pdo, 'players', 'remarks')) {
             $pdo->exec("UPDATE players SET address = remarks WHERE (address IS NULL OR TRIM(address) = '') AND remarks IS NOT NULL AND TRIM(remarks) != ''");
         }

@@ -46,30 +46,68 @@ if (isset($_POST['save_parent_edit'])) {
     try {
         $mobile = bm_normalize_mobile((string)($_POST['contact_mobile'] ?? ''));
         $primary = $sub['primary'] ?: [];
-        bm_parent_update_player_contact(
-            $pdo,
-            (int)$primary['id'],
-            (string)($_POST['contact_mobile'] ?? ''),
-            (string)($_POST['district'] ?? $_POST['address'] ?? ''),
-            'Player'
-        );
-        if (!empty($sub['double_partner'])) {
+        $category = is_array($sub['category'] ?? null) ? $sub['category'] : null;
+        if (bm_parent_can_correct_identity($primary, $code)) {
+            $primary = bm_parent_correct_player_identity($pdo, (int)$primary['id'], $code, [
+                'full_name' => (string)($_POST['full_name'] ?? ''),
+                'gender' => (string)($_POST['gender'] ?? ''),
+                'bai_id' => (string)($_POST['bai_id'] ?? ''),
+                'pbi_id' => (string)($_POST['pbi_id'] ?? ''),
+                'district' => (string)($_POST['district'] ?? $_POST['address'] ?? ''),
+                'contact_mobile' => (string)($_POST['contact_mobile'] ?? ''),
+            ], 'Player', $category);
+        } else {
             bm_parent_update_player_contact(
                 $pdo,
-                (int)$sub['double_partner']['id'],
-                (string)($_POST['d_contact_mobile'] ?? ''),
-                (string)($_POST['d_district'] ?? $_POST['d_address'] ?? ''),
-                'Doubles partner'
+                (int)$primary['id'],
+                (string)($_POST['contact_mobile'] ?? ''),
+                (string)($_POST['district'] ?? $_POST['address'] ?? ''),
+                'Player'
             );
         }
+        $primaryGender = strtolower((string)($primary['gender'] ?? ''));
+        if (!empty($sub['double_partner'])) {
+            $partner = $sub['double_partner'];
+            if (bm_parent_can_correct_identity($partner, $code)) {
+                bm_parent_correct_player_identity($pdo, (int)$partner['id'], $code, [
+                    'full_name' => (string)($_POST['d_full_name'] ?? ''),
+                    'gender' => (string)($_POST['d_gender'] ?? ''),
+                    'bai_id' => (string)($_POST['d_bai_id'] ?? ''),
+                    'pbi_id' => (string)($_POST['d_pbi_id'] ?? ''),
+                    'district' => (string)($_POST['d_district'] ?? $_POST['d_address'] ?? ''),
+                    'contact_mobile' => (string)($_POST['d_contact_mobile'] ?? ''),
+                ], 'Doubles partner', null, $primaryGender);
+            } else {
+                bm_parent_update_player_contact(
+                    $pdo,
+                    (int)$partner['id'],
+                    (string)($_POST['d_contact_mobile'] ?? ''),
+                    (string)($_POST['d_district'] ?? $_POST['d_address'] ?? ''),
+                    'Doubles partner'
+                );
+            }
+        }
         if (!empty($sub['mix_partner'])) {
-            bm_parent_update_player_contact(
-                $pdo,
-                (int)$sub['mix_partner']['id'],
-                (string)($_POST['m_contact_mobile'] ?? ''),
-                (string)($_POST['m_district'] ?? $_POST['m_address'] ?? ''),
-                'Mix Double partner'
-            );
+            $partner = $sub['mix_partner'];
+            $mixGender = $primaryGender === 'girl' ? 'boy' : 'girl';
+            if (bm_parent_can_correct_identity($partner, $code)) {
+                bm_parent_correct_player_identity($pdo, (int)$partner['id'], $code, [
+                    'full_name' => (string)($_POST['m_full_name'] ?? ''),
+                    'gender' => (string)($_POST['m_gender'] ?? ''),
+                    'bai_id' => (string)($_POST['m_bai_id'] ?? ''),
+                    'pbi_id' => (string)($_POST['m_pbi_id'] ?? ''),
+                    'district' => (string)($_POST['m_district'] ?? $_POST['m_address'] ?? ''),
+                    'contact_mobile' => (string)($_POST['m_contact_mobile'] ?? ''),
+                ], 'Mix Double partner', null, $mixGender);
+            } else {
+                bm_parent_update_player_contact(
+                    $pdo,
+                    (int)$partner['id'],
+                    (string)($_POST['m_contact_mobile'] ?? ''),
+                    (string)($_POST['m_district'] ?? $_POST['m_address'] ?? ''),
+                    'Mix Double partner'
+                );
+            }
         }
         foreach (bm_parent_submission_team_ids($pdo, $sub) as $teamId) {
             bm_parent_refresh_team_label($pdo, $teamId);
@@ -105,6 +143,9 @@ if (isset($_POST['save_parent_edit'])) {
 $p = $sub['primary'] ?: [];
 $d = $sub['double_partner'] ?: [];
 $m = $sub['mix_partner'] ?: [];
+$fixP = bm_parent_can_correct_identity($p, $code);
+$fixD = $d ? bm_parent_can_correct_identity($d, $code) : false;
+$fixM = $m ? bm_parent_can_correct_identity($m, $code) : false;
 $eventLabels = [];
 foreach ($sub['events'] as $ec) {
     $eventLabels[] = bm_event_label($ec);
@@ -141,25 +182,64 @@ require __DIR__ . '/includes/header.php';
     <input type="hidden" name="p" value="<?= bm_h($code) ?>">
     <input type="hidden" name="r" value="<?= bm_h($receipt) ?>">
     <p class="hint span-2">Player</p>
+    <?php if ($fixP): ?>
+    <p class="hint span-2">Check the name and IDs. Saving locks them for every phone and every later tournament.</p>
+    <label>Player name<input type="text" name="full_name" required maxlength="160" value="<?= bm_h((string)($p['full_name'] ?? '')) ?>"></label>
+    <label>Gender
+      <select name="gender" required>
+        <option value="boy" <?= (string)($p['gender'] ?? '') === 'boy' ? 'selected' : '' ?>>Boy</option>
+        <option value="girl" <?= (string)($p['gender'] ?? '') === 'girl' ? 'selected' : '' ?>>Girl</option>
+      </select>
+    </label>
+    <label>BAI ID<input type="text" name="bai_id" maxlength="80" value="<?= bm_h((string)($p['bai_id'] ?? '')) ?>"></label>
+    <label>PBA ID<input type="text" name="pbi_id" maxlength="80" value="<?= bm_h((string)($p['pbi_id'] ?? '')) ?>"></label>
+    <?php else: ?>
     <label>Player name<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($p['full_name'] ?? '')) ?>"></label>
     <label>Gender<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h(bm_gender_label((string)($p['gender'] ?? ''))) ?>"></label>
     <label>BAI ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($p['bai_id'] ?? '')) ?>"></label>
     <label>PBA ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($p['pbi_id'] ?? '')) ?>"></label>
+    <?php endif; ?>
     <label>Contact<input type="tel" name="contact_mobile" required maxlength="15" value="<?= bm_h((string)($p['mobile'] ?? $sub['contact_mobile'] ?? '')) ?>"></label>
     <label class="span-2">District<input type="text" name="district" required maxlength="120" value="<?= bm_h(bm_player_address($p)) ?>"></label>
     <?php if ($d): ?>
     <p class="hint span-2">Doubles partner</p>
+    <?php if ($fixD): ?>
+    <p class="hint span-2">Check the partner name and IDs. Saving locks them.</p>
+    <label>Partner name<input type="text" name="d_full_name" required maxlength="160" value="<?= bm_h((string)($d['full_name'] ?? '')) ?>"></label>
+    <label>Partner gender
+      <select name="d_gender" required>
+        <option value="boy" <?= (string)($d['gender'] ?? '') === 'boy' ? 'selected' : '' ?>>Boy</option>
+        <option value="girl" <?= (string)($d['gender'] ?? '') === 'girl' ? 'selected' : '' ?>>Girl</option>
+      </select>
+    </label>
+    <label>Partner BAI ID<input type="text" name="d_bai_id" maxlength="80" value="<?= bm_h((string)($d['bai_id'] ?? '')) ?>"></label>
+    <label>Partner PBA ID<input type="text" name="d_pbi_id" maxlength="80" value="<?= bm_h((string)($d['pbi_id'] ?? '')) ?>"></label>
+    <?php else: ?>
     <label>Partner name<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($d['full_name'] ?? '')) ?>"></label>
     <label>Partner BAI ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($d['bai_id'] ?? '')) ?>"></label>
     <label>Partner PBA ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($d['pbi_id'] ?? '')) ?>"></label>
+    <?php endif; ?>
     <label>Partner contact<input type="tel" name="d_contact_mobile" required maxlength="15" value="<?= bm_h((string)($d['mobile'] ?? '')) ?>"></label>
     <label class="span-2">Partner district<input type="text" name="d_district" required maxlength="120" value="<?= bm_h(bm_player_address($d)) ?>"></label>
     <?php endif; ?>
     <?php if ($m): ?>
     <p class="hint span-2">Mix Double partner</p>
+    <?php if ($fixM): ?>
+    <p class="hint span-2">Check the partner name and IDs. Saving locks them.</p>
+    <label>Partner name<input type="text" name="m_full_name" required maxlength="160" value="<?= bm_h((string)($m['full_name'] ?? '')) ?>"></label>
+    <label>Partner gender
+      <select name="m_gender" required>
+        <option value="boy" <?= (string)($m['gender'] ?? '') === 'boy' ? 'selected' : '' ?>>Boy</option>
+        <option value="girl" <?= (string)($m['gender'] ?? '') === 'girl' ? 'selected' : '' ?>>Girl</option>
+      </select>
+    </label>
+    <label>Partner BAI ID<input type="text" name="m_bai_id" maxlength="80" value="<?= bm_h((string)($m['bai_id'] ?? '')) ?>"></label>
+    <label>Partner PBA ID<input type="text" name="m_pbi_id" maxlength="80" value="<?= bm_h((string)($m['pbi_id'] ?? '')) ?>"></label>
+    <?php else: ?>
     <label>Partner name<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($m['full_name'] ?? '')) ?>"></label>
     <label>Partner BAI ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($m['bai_id'] ?? '')) ?>"></label>
     <label>Partner PBA ID<input type="text" readonly class="is-locked" tabindex="-1" value="<?= bm_h((string)($m['pbi_id'] ?? '')) ?>"></label>
+    <?php endif; ?>
     <label>Partner contact<input type="tel" name="m_contact_mobile" required maxlength="15" value="<?= bm_h((string)($m['mobile'] ?? '')) ?>"></label>
     <label class="span-2">Partner district<input type="text" name="m_district" required maxlength="120" value="<?= bm_h(bm_player_address($m)) ?>"></label>
     <?php endif; ?>

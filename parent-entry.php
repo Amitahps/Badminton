@@ -168,7 +168,7 @@ function bm_parent_resolve_category(PDO $pdo, string $ageKey, string $gender, in
  *
  * @param array{full_name?:string,gender?:string,bai_id?:string,pbi_id?:string,address?:string,district?:string,mobile?:string,contact_mobile?:string} $data
  */
-function bm_parent_find_or_create_player(PDO $pdo, array $data, string $who = 'Player'): array
+function bm_parent_find_or_create_player(PDO $pdo, array $data, string $who = 'Player', string $parentCode = ''): array
 {
     $name = trim((string)($data['full_name'] ?? ''));
     $gender = strtolower(trim((string)($data['gender'] ?? '')));
@@ -229,7 +229,8 @@ function bm_parent_find_or_create_player(PDO $pdo, array $data, string $who = 'P
         throw new RuntimeException('Select Boy or Girl for ' . $who . '.');
     }
     bm_assert_unique_player_ids($pdo, $bai !== '' ? $bai : null, $pba !== '' ? $pba : null, 0);
-    $pdo->prepare("INSERT INTO players (full_name, gender, bai_id, pbi_id, address, remarks, father_name, mobile) VALUES (?,?,?,?,?,?,?,?)")
+    $parentCode = trim($parentCode);
+    $pdo->prepare("INSERT INTO players (full_name, gender, bai_id, pbi_id, address, remarks, father_name, mobile, created_parent_code, identity_locked) VALUES (?,?,?,?,?,?,?,?,?,?)")
         ->execute([
             $name,
             $gender,
@@ -239,6 +240,8 @@ function bm_parent_find_or_create_player(PDO $pdo, array $data, string $who = 'P
             $address,
             null,
             $mobile,
+            $parentCode !== '' ? $parentCode : null,
+            $parentCode !== '' ? 0 : 1,
         ]);
     $id = (int)$pdo->lastInsertId();
     $st = $pdo->prepare('SELECT * FROM players WHERE id=?');
@@ -291,6 +294,7 @@ function bm_parent_add_team(PDO $pdo, int $tournamentId, int $catId, string $eve
 function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, array $files = []): array
 {
     $tournamentId = (int)$tournament['id'];
+    $parentCode = bm_parent_code_from_post_or_session((string)($tournament['public_token'] ?? ''), (string)($post['parent_code'] ?? ''));
     $ageKey = trim((string)($post['age_key'] ?? ''));
     $postedBai = trim((string)($post['bai_id'] ?? ''));
     $postedPbi = trim((string)($post['pbi_id'] ?? ''));
@@ -340,7 +344,7 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
         'pbi_id' => $postedPbi,
         'address' => (string)($post['district'] ?? $post['address'] ?? ''),
         'mobile' => (string)($post['contact_mobile'] ?? ''),
-    ], 'Player');
+    ], 'Player', $parentCode);
     $gender = strtolower((string)$primary['gender']);
     $father = trim((string)($primary['father_name'] ?? ''));
     $mobile = trim((string)($primary['mobile'] ?? ''));
@@ -356,7 +360,7 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
             'pbi_id' => (string)($post['d_pbi_id'] ?? ''),
             'address' => (string)($post['d_district'] ?? $post['d_address'] ?? ''),
             'mobile' => (string)($post['d_contact_mobile'] ?? ''),
-        ], 'Doubles partner');
+        ], 'Doubles partner', $parentCode);
         if ((int)$doublePartner['id'] === (int)$primary['id']) {
             throw new RuntimeException('Doubles partner must be a different player.');
         }
@@ -373,7 +377,7 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
             'pbi_id' => (string)($post['m_pbi_id'] ?? ''),
             'address' => (string)($post['m_district'] ?? $post['m_address'] ?? ''),
             'mobile' => (string)($post['m_contact_mobile'] ?? ''),
-        ], 'Mix Double partner');
+        ], 'Mix Double partner', $parentCode);
         if ((int)$mixPartner['id'] === (int)$primary['id']) {
             throw new RuntimeException('Mix Double partner must be a different player.');
         }
@@ -408,8 +412,6 @@ function bm_parent_save_submission(PDO $pdo, array $tournament, array $post, arr
         $utr = bm_validate_utr((string)($post['payment_utr'] ?? ''));
         bm_assert_unique_utr($pdo, $utr, 0);
     }
-    $parentCode = bm_parent_code_from_post_or_session((string)($tournament['public_token'] ?? ''), (string)($post['parent_code'] ?? ''));
-
     $pdo->beginTransaction();
     try {
         if ($needPay) {
@@ -2000,7 +2002,113 @@ function bm_parent_load_by_id(PDO $pdo, int $id, int $tournamentId = 0): ?array
     return bm_parent_load_receipt($pdo, (string)$row['receipt_code'], (int)$row['tournament_id']);
 }
 
-/** Parent edit: contact and district only. Name, gender, BAI ID and PBA ID stay as saved. */
+function bm_parent_can_correct_identity(array $player, string $parentCode): bool
+{
+    $parentCode = strtolower(trim($parentCode));
+    $owner = strtolower(trim((string)($player['created_parent_code'] ?? '')));
+    if ($parentCode === '' || $owner === '' || (int)($player['identity_locked'] ?? 1) !== 0) {
+        return false;
+    }
+    return strlen($parentCode) === strlen($owner) && hash_equals($owner, $parentCode);
+}
+
+function bm_parent_player_still_used(PDO $pdo, int $playerId): bool
+{
+    $checks = [
+        'SELECT 1 FROM parent_submissions WHERE primary_player_id=? OR double_partner_id=? OR mix_partner_id=? LIMIT 1' => [$playerId, $playerId, $playerId],
+        'SELECT 1 FROM tournament_entries WHERE player_id=? LIMIT 1' => [$playerId],
+        'SELECT 1 FROM tournament_team_members WHERE player_id=? LIMIT 1' => [$playerId],
+    ];
+    foreach ($checks as $sql => $params) {
+        $st = $pdo->prepare($sql);
+        $st->execute($params);
+        if ($st->fetch()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function bm_parent_forget_unlocked_player(PDO $pdo, int $playerId, string $parentCode): void
+{
+    if ($playerId <= 0) {
+        return;
+    }
+    $st = $pdo->prepare('SELECT * FROM players WHERE id=?');
+    $st->execute([$playerId]);
+    $player = $st->fetch();
+    if (!$player || !bm_parent_can_correct_identity($player, $parentCode)) {
+        return;
+    }
+    if (bm_parent_player_still_used($pdo, $playerId)) {
+        return;
+    }
+    $pdo->prepare('DELETE FROM players WHERE id=? AND identity_locked=0')->execute([$playerId]);
+}
+
+/**
+ * The phone that created this player may correct the name and IDs once.
+ * Saving locks them. Another saved player cannot be overwritten.
+ *
+ * @param array<string,mixed> $data
+ * @param array<string,mixed>|null $category
+ */
+function bm_parent_correct_player_identity(PDO $pdo, int $playerId, string $parentCode, array $data, string $who, ?array $category = null, ?string $mustGender = null): array
+{
+    $st = $pdo->prepare('SELECT * FROM players WHERE id=?');
+    $st->execute([$playerId]);
+    $cur = $st->fetch();
+    if (!$cur || !bm_parent_can_correct_identity($cur, $parentCode)) {
+        throw new RuntimeException($who . ' details are already saved and cannot be changed.');
+    }
+    $name = trim((string)($data['full_name'] ?? ''));
+    $gender = strtolower(trim((string)($data['gender'] ?? '')));
+    $bai = trim((string)($data['bai_id'] ?? ''));
+    $pba = trim((string)($data['pbi_id'] ?? ''));
+    $address = trim((string)($data['address'] ?? $data['district'] ?? ''));
+    $mobile = trim((string)($data['mobile'] ?? $data['contact_mobile'] ?? ''));
+    if ($name === '') {
+        throw new RuntimeException($who . ' name is required.');
+    }
+    if (!in_array($gender, ['boy', 'girl'], true)) {
+        throw new RuntimeException('Select Boy or Girl for ' . $who . '.');
+    }
+    if ($mobile === '') {
+        throw new RuntimeException('Contact number is required for ' . $who . '.');
+    }
+    $mobile = bm_normalize_mobile($mobile);
+    if ($address === '') {
+        throw new RuntimeException('District is required for ' . $who . '.');
+    }
+    if ($category) {
+        $scope = bm_category_gender_scope($category);
+        if (($scope === 'boys' && $gender !== 'boy') || ($scope === 'girls' && $gender !== 'girl')) {
+            throw new RuntimeException($who . ' gender does not match this age category. Remove the entry and enter it again in the matching category.');
+        }
+    }
+    if ($mustGender !== null && $gender !== $mustGender) {
+        throw new RuntimeException($who . ' must be ' . ($mustGender === 'girl' ? 'a girl' : 'a boy') . '.');
+    }
+    bm_assert_unique_player_ids($pdo, $bai !== '' ? $bai : null, $pba !== '' ? $pba : null, $playerId);
+    $updated = $pdo->prepare("UPDATE players SET full_name=?, gender=?, bai_id=?, pbi_id=?, address=?, remarks=?, mobile=?, identity_locked=1, updated_at=datetime('now','localtime') WHERE id=? AND identity_locked=0");
+    $updated->execute([
+        $name,
+        $gender,
+        $bai !== '' ? $bai : null,
+        $pba !== '' ? $pba : null,
+        $address,
+        $address,
+        $mobile,
+        $playerId,
+    ]);
+    if ($updated->rowCount() < 1) {
+        throw new RuntimeException($who . ' details are already saved and cannot be changed.');
+    }
+    $st->execute([$playerId]);
+    return $st->fetch();
+}
+
+/** Parent edit: contact and district. A locked name, gender, BAI ID and PBA ID stay as saved. */
 function bm_parent_update_player_contact(PDO $pdo, int $playerId, string $mobile, string $address, string $who): array
 {
     $st = $pdo->prepare('SELECT * FROM players WHERE id=?');
@@ -2164,6 +2272,10 @@ function bm_parent_delete_submission(PDO $pdo, array $sub): void
             }
         }
         $pdo->prepare('DELETE FROM parent_submissions WHERE id=?')->execute([(int)$sub['id']]);
+        $ownerCode = trim((string)($sub['parent_code'] ?? ''));
+        foreach ($people as $pid) {
+            bm_parent_forget_unlocked_player($pdo, $pid, $ownerCode);
+        }
         $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
