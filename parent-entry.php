@@ -241,7 +241,7 @@ function bm_parent_find_or_create_player(PDO $pdo, array $data, string $who = 'P
             null,
             $mobile,
             $parentCode !== '' ? $parentCode : null,
-            $parentCode !== '' ? 0 : 1,
+            1,
         ]);
     $id = (int)$pdo->lastInsertId();
     $st = $pdo->prepare('SELECT * FROM players WHERE id=?');
@@ -2002,11 +2002,11 @@ function bm_parent_load_by_id(PDO $pdo, int $id, int $tournamentId = 0): ?array
     return bm_parent_load_receipt($pdo, (string)$row['receipt_code'], (int)$row['tournament_id']);
 }
 
-function bm_parent_can_correct_identity(array $player, string $parentCode): bool
+function bm_parent_phone_created_player(array $player, string $parentCode): bool
 {
     $parentCode = strtolower(trim($parentCode));
     $owner = strtolower(trim((string)($player['created_parent_code'] ?? '')));
-    if ($parentCode === '' || $owner === '' || (int)($player['identity_locked'] ?? 1) !== 0) {
+    if ($parentCode === '' || $owner === '') {
         return false;
     }
     return strlen($parentCode) === strlen($owner) && hash_equals($owner, $parentCode);
@@ -2037,78 +2037,16 @@ function bm_parent_forget_unlocked_player(PDO $pdo, int $playerId, string $paren
     $st = $pdo->prepare('SELECT * FROM players WHERE id=?');
     $st->execute([$playerId]);
     $player = $st->fetch();
-    if (!$player || !bm_parent_can_correct_identity($player, $parentCode)) {
+    if (!$player || !bm_parent_phone_created_player($player, $parentCode)) {
         return;
     }
     if (bm_parent_player_still_used($pdo, $playerId)) {
         return;
     }
-    $pdo->prepare('DELETE FROM players WHERE id=? AND identity_locked=0')->execute([$playerId]);
+    $pdo->prepare('DELETE FROM players WHERE id=?')->execute([$playerId]);
 }
 
-/**
- * The phone that created this player may correct the name and IDs once.
- * Saving locks them. Another saved player cannot be overwritten.
- *
- * @param array<string,mixed> $data
- * @param array<string,mixed>|null $category
- */
-function bm_parent_correct_player_identity(PDO $pdo, int $playerId, string $parentCode, array $data, string $who, ?array $category = null, ?string $mustGender = null): array
-{
-    $st = $pdo->prepare('SELECT * FROM players WHERE id=?');
-    $st->execute([$playerId]);
-    $cur = $st->fetch();
-    if (!$cur || !bm_parent_can_correct_identity($cur, $parentCode)) {
-        throw new RuntimeException($who . ' details are already saved and cannot be changed.');
-    }
-    $name = trim((string)($data['full_name'] ?? ''));
-    $gender = strtolower(trim((string)($data['gender'] ?? '')));
-    $bai = trim((string)($data['bai_id'] ?? ''));
-    $pba = trim((string)($data['pbi_id'] ?? ''));
-    $address = trim((string)($data['address'] ?? $data['district'] ?? ''));
-    $mobile = trim((string)($data['mobile'] ?? $data['contact_mobile'] ?? ''));
-    if ($name === '') {
-        throw new RuntimeException($who . ' name is required.');
-    }
-    if (!in_array($gender, ['boy', 'girl'], true)) {
-        throw new RuntimeException('Select Boy or Girl for ' . $who . '.');
-    }
-    if ($mobile === '') {
-        throw new RuntimeException('Contact number is required for ' . $who . '.');
-    }
-    $mobile = bm_normalize_mobile($mobile);
-    if ($address === '') {
-        throw new RuntimeException('District is required for ' . $who . '.');
-    }
-    if ($category) {
-        $scope = bm_category_gender_scope($category);
-        if (($scope === 'boys' && $gender !== 'boy') || ($scope === 'girls' && $gender !== 'girl')) {
-            throw new RuntimeException($who . ' gender does not match this age category. Remove the entry and enter it again in the matching category.');
-        }
-    }
-    if ($mustGender !== null && $gender !== $mustGender) {
-        throw new RuntimeException($who . ' must be ' . ($mustGender === 'girl' ? 'a girl' : 'a boy') . '.');
-    }
-    bm_assert_unique_player_ids($pdo, $bai !== '' ? $bai : null, $pba !== '' ? $pba : null, $playerId);
-    $updated = $pdo->prepare("UPDATE players SET full_name=?, gender=?, bai_id=?, pbi_id=?, address=?, remarks=?, mobile=?, identity_locked=1, updated_at=datetime('now','localtime') WHERE id=? AND identity_locked=0");
-    $updated->execute([
-        $name,
-        $gender,
-        $bai !== '' ? $bai : null,
-        $pba !== '' ? $pba : null,
-        $address,
-        $address,
-        $mobile,
-        $playerId,
-    ]);
-    if ($updated->rowCount() < 1) {
-        throw new RuntimeException($who . ' details are already saved and cannot be changed.');
-    }
-    $st->execute([$playerId]);
-    return $st->fetch();
-}
-
-/** Parent edit: contact and district. A locked name, gender, BAI ID and PBA ID stay as saved. */
+/** Parent edit: contact and district. A saved name, gender, BAI ID and PBA ID stay as saved. */
 function bm_parent_update_player_contact(PDO $pdo, int $playerId, string $mobile, string $address, string $who): array
 {
     $st = $pdo->prepare('SELECT * FROM players WHERE id=?');
